@@ -15,6 +15,7 @@ import pandas as pd
 
 import config
 from src.data.returns import compute_log_returns
+from src.optimization.black_litterman import BlackLittermanConfig, BlackLittermanEstimator
 from src.optimization.covariance import CovarianceEstimator, get_covariance_estimator
 from src.optimization.kelly import kelly_weights
 
@@ -81,6 +82,81 @@ def make_kelly_signal(
 
         # Annualized covariance (daily cov × 252)
         cov = cov_estimator.estimate(log_returns) * trading_days
+
+        weights = kelly_weights(
+            expected_returns=mu,
+            cov_matrix=cov,
+            risk_free_rate=risk_free_rate,
+            fraction=fraction,
+            max_weight=max_weight,
+            max_leverage=max_leverage,
+        )
+
+        return weights
+
+    return signal_fn
+
+
+def make_bl_kelly_signal(
+    lookback: int = config.LOOKBACK_WINDOW,
+    fraction: float = config.KELLY_FRACTION,
+    risk_free_rate: float = config.RISK_FREE_RATE,
+    max_weight: float = config.MAX_POSITION_WEIGHT,
+    max_leverage: float = config.MAX_LEVERAGE,
+    bl_config: BlackLittermanConfig | None = None,
+    trading_days: int = 252,
+) -> Callable[..., pd.Series]:
+    """
+    Create a Black-Litterman + Kelly criterion signal function.
+
+    Identical pipeline to ``make_kelly_signal`` except that expected returns
+    are estimated via the BL posterior (equilibrium prior + momentum views)
+    rather than from raw historical means.  The Ledoit-Wolf covariance
+    estimator is used for numerical stability.
+
+    Parameters
+    ----------
+    lookback : int
+        Rolling lookback window in trading days.
+    fraction : float
+        Kelly fraction (0.5 = half-Kelly).
+    risk_free_rate : float
+        Annualised risk-free rate.
+    max_weight : float
+        Per-asset weight cap.
+    max_leverage : float
+        Gross leverage cap.
+    bl_config : BlackLittermanConfig or None
+        BL hyperparameters.  Defaults to BlackLittermanConfig().
+    trading_days : int
+        Trading days per year for annualisation.
+
+    Returns
+    -------
+    callable
+        SignalProvider-compatible function.
+    """
+    cov_estimator = get_covariance_estimator("ledoit_wolf")
+    bl_estimator = BlackLittermanEstimator(bl_config)
+
+    def signal_fn(
+        date: pd.Timestamp,
+        prices: pd.DataFrame,
+        current_weights: pd.Series,
+    ) -> pd.Series:
+        n_assets = len(current_weights)
+
+        if len(prices) < lookback + 1:
+            return pd.Series(1.0 / n_assets, index=current_weights.index)
+
+        window_prices = prices.iloc[-(lookback + 1):]
+        log_returns = compute_log_returns(window_prices)
+
+        # Annualised Ledoit-Wolf covariance
+        cov = cov_estimator.estimate(log_returns) * trading_days
+
+        # BL posterior returns (replaces raw historical mean)
+        mu = bl_estimator.estimate(log_returns, cov)
 
         weights = kelly_weights(
             expected_returns=mu,

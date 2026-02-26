@@ -22,6 +22,7 @@ import pandas as pd
 import config as cfg
 from src.data.returns import compute_log_returns
 from src.engine.backtest import BacktestResult, run_backtest
+from src.optimization.black_litterman import BlackLittermanConfig, BlackLittermanEstimator
 from src.optimization.covariance import LedoitWolfCovariance
 from src.optimization.kelly import kelly_weights
 from src.optimization.signals import make_kelly_signal
@@ -112,6 +113,8 @@ def run_walk_forward(
     max_weight: float = cfg.MAX_POSITION_WEIGHT,
     max_leverage: float = cfg.MAX_LEVERAGE,
     initial_capital: float = cfg.INITIAL_CAPITAL,
+    return_estimator: str = "historical_mean",
+    bl_config: BlackLittermanConfig | None = None,
 ) -> WalkForwardResult:
     """
     Run anchored walk-forward out-of-sample validation.
@@ -154,6 +157,13 @@ def run_walk_forward(
         Gross leverage cap.
     initial_capital : float
         Starting portfolio value for both backtests.
+    return_estimator : str
+        ``"historical_mean"`` (default) uses raw annualised mean log returns.
+        ``"black_litterman"`` replaces the historical mean with the BL
+        posterior (equilibrium prior + expanding-window momentum views).
+    bl_config : BlackLittermanConfig or None
+        BL hyperparameters.  Only used when ``return_estimator="black_litterman"``.
+        Defaults to ``BlackLittermanConfig()``.
 
     Returns
     -------
@@ -175,6 +185,11 @@ def run_walk_forward(
 
     # ── 3. Expanding-window weight estimation ──────────────────────────────
     cov_estimator = LedoitWolfCovariance()
+    bl_estimator: BlackLittermanEstimator | None = (
+        BlackLittermanEstimator(bl_config)
+        if return_estimator == "black_litterman"
+        else None
+    )
     weight_records: list[dict] = []
     oos_start_date: pd.Timestamp | None = None
 
@@ -195,11 +210,14 @@ def run_walk_forward(
         if oos_start_date is None:
             oos_start_date = date
 
-        # Annualised expected returns from this expanding window
-        mu: pd.Series = train_returns.mean() * TRADING_DAYS
-
         # Annualised Ledoit-Wolf covariance from this expanding window
         cov: pd.DataFrame = cov_estimator.estimate(train_returns) * TRADING_DAYS
+
+        # Expected returns — either raw historical mean or BL posterior
+        if bl_estimator is not None:
+            mu = bl_estimator.estimate(train_returns, cov)
+        else:
+            mu = train_returns.mean() * TRADING_DAYS
 
         w = kelly_weights(
             expected_returns=mu,
@@ -226,7 +244,8 @@ def run_walk_forward(
 
     assert oos_start_date is not None  # guaranteed by the check above
     logger.info(
-        "Walk-forward: %d monthly windows computed | OOS start: %s",
+        "Walk-forward (%s): %d monthly windows | OOS start: %s",
+        return_estimator,
         len(weight_history),
         oos_start_date.date(),
     )

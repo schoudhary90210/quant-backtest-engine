@@ -408,3 +408,54 @@ def plot_is_vs_oos_equity(
     ax.grid(color=COLORS["grid"], linewidth=0.5)
     fig.tight_layout()
     return _save(fig, filename)
+
+
+# ---------------------------------------------------------------------------
+# 8. Return estimator comparison
+# ---------------------------------------------------------------------------
+
+
+def plot_return_estimator_comparison(
+    equity_curves: dict[str, pd.Series],
+    metrics: dict[str, tuple[float, float]],
+    filename: str = "return_estimator_comparison.png",
+) -> Path:
+    """
+    Overlay equity curves for different return estimators with metric labels.
+
+    Parameters
+    ----------
+    equity_curves : dict[str, pd.Series]
+        Strategy name → equity curve (DatetimeIndex, dollar values).
+    metrics : dict[str, tuple[float, float]]
+        Strategy name → (cagr, sharpe) pre-computed floats shown in the legend.
+    filename : str
+        Output file name.
+    """
+    palette = {
+        "Equal Weight":          COLORS["equal_weight"],
+        "Historical Mean + Kelly": COLORS["half_kelly"],
+        "BL + Kelly":            "#4CAF50",     # green
+    }
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    for name, equity in equity_curves.items():
+        norm = equity / equity.iloc[0]
+        color = palette.get(name, "#607D8B")
+        cagr, sharpe = metrics.get(name, (float("nan"), float("nan")))
+        label = f"{name}  (CAGR {cagr * 100:.1f}%  Sharpe {sharpe:.2f})"
+        ax.plot(norm.index, norm, label=label, color=color, linewidth=1.6)
+
+    ax.axhline(1.0, color="#9E9E9E", linewidth=0.8, linestyle="--")
+    ax.set_title(
+        "Return Estimator Comparison — Historical Mean vs Black-Litterman",
+        fontsize=14, fontweight="bold",
+    )
+    ax.set_ylabel("Portfolio Value (×)")
+    ax.set_xlabel("Date")
+    ax.legend(framealpha=0.9, fontsize=9)
+    ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: f"{x:.1f}×"))
+    ax.grid(color=COLORS["grid"], linewidth=0.5)
+    fig.tight_layout()
+    return _save(fig, filename)
