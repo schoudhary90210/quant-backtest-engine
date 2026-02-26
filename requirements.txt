@@ -1,8 +1,18 @@
-numpy
-pandas
-yfinance
-scikit-learn
-scipy
-matplotlib
-pytest
-pyarrow
+# Core numerics
+numpy==2.4.2
+pandas==3.0.1
+scipy==1.17.1
+
+# Data ingestion
+yfinance==1.2.0
+pyarrow==23.0.1
+
+# Machine learning (covariance estimation)
+scikit-learn==1.8.0
+
+# Visualization
+matplotlib==3.10.8
+pillow==12.1.1
+
+# Testing
+pytest==9.0.2

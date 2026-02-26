@@ -28,5 +28,6 @@ crypto, and real estate.
 
 ## Commands
 - **Run tests:** `source venv/bin/activate && python -m pytest tests/ -v`
-- **Run backtest:** `source venv/bin/activate && python -m src.engine.backtest`
+- **Run full pipeline:** `source venv/bin/activate && python main.py`
+- **Run backtest only:** `source venv/bin/activate && python run_backtest.py`
 - **Fetch data:** `source venv/bin/activate && python -m src.data.fetcher`
