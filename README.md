@@ -1,6 +1,16 @@
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)
+![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-141%20passing-brightgreen?style=flat-square)
+
 # Quantitative Backtesting & Portfolio Optimization Engine
 
-> A production-quality multi-asset backtesting framework with Kelly Criterion portfolio optimization, Ledoit-Wolf covariance estimation, Monte Carlo simulation, and full risk analytics — backtested on 12 assets from 2014 to 2025.
+I built this to find out whether Kelly Criterion portfolio optimization actually beats a simple equal-weight strategy on real market data — not in theory, not on toy examples, but on 12 real assets over 11 years with realistic transaction costs. The short answer is yes, and by a lot. The longer answer is in the results below.
+
+---
+
+## Motivation
+
+I kept reading about Kelly Criterion in trading books and papers and everyone either dismissed it as too aggressive or used it on single-asset examples with made-up numbers. I wanted to see what happens when you apply the full multi-asset version — with proper covariance estimation, position constraints, and real transaction costs — to a diversified portfolio. I also wanted to build the infrastructure properly: event-driven backtester, parquet caching, full risk metrics, Monte Carlo forward simulation. Partly to learn, partly because most open-source backtesting code I'd seen was either too simple to trust or too complex to understand. This sits somewhere in the middle.
 
 ---
 
@@ -174,11 +184,11 @@ MC_NUM_PATHS = 50_000
 
 ### Kelly Criterion
 
-The Kelly Criterion provides the theoretically optimal bet size that maximises the long-run geometric growth rate of a portfolio. For a single asset it simplifies to *f\* = (μ − r) / σ²*, but the multi-asset generalisation used here is:
+The Kelly Criterion provides the theoretically optimal bet size that maximises the long-run geometric growth rate of a portfolio. For a single asset it simplifies to *f\* = (μ − r) / σ²*, but the multi-asset generalisation I implemented is:
 
 **f\* = Σ⁻¹ (μ − r)**
 
-where **Σ** is the N×N covariance matrix, **μ** is the vector of expected excess returns, and **r** is the risk-free rate. The system is solved via `numpy.linalg.solve` rather than explicit matrix inversion, which is numerically stable even for near-singular covariances (falling back to least-squares via `numpy.linalg.lstsq` when needed). In practice, full Kelly produces volatile portfolios that are deeply uncomfortable to hold through drawdowns. This engine defaults to **Half-Kelly (fraction = 0.5)**, which cuts position sizes in half while retaining most of the geometric-growth advantage — the empirical results above show essentially identical CAGR with materially better drawdown and Calmar ratio compared to Full Kelly.
+where **Σ** is the N×N covariance matrix, **μ** is the vector of expected excess returns, and **r** is the risk-free rate. I solve the system via `numpy.linalg.solve` rather than explicit matrix inversion, which is numerically stable even for near-singular covariances (falling back to least-squares via `numpy.linalg.lstsq` when needed). In practice, full Kelly produces volatile portfolios that are deeply uncomfortable to hold through drawdowns. I default to **Half-Kelly (fraction = 0.5)**, which cuts position sizes in half while retaining most of the geometric-growth advantage — the empirical results above show essentially identical CAGR with materially better drawdown and Calmar ratio compared to Full Kelly.
 
 Constraints are applied in sequence after solving: (1) assets with negative expected excess return over the risk-free rate are zeroed out entirely; (2) each position is clipped to `MAX_POSITION_WEIGHT` (40%); (3) if total gross exposure exceeds `MAX_LEVERAGE` (1.5×), all weights are scaled proportionally. Expected returns are estimated from a rolling `LOOKBACK_WINDOW` (252 days) of historical log returns, annualised by multiplying by 252.
 
@@ -188,7 +198,7 @@ The core challenge in multi-asset portfolio optimisation is estimating a reliabl
 
 **Σ̂ = (1 − α) S + α μI**
 
-where the optimal shrinkage intensity **α** is derived analytically, requiring no cross-validation. This engine exposes three swappable estimators — `SampleCovariance`, `LedoitWolfCovariance`, and `EWMACovariance` — all behind a common `estimate(returns) → pd.DataFrame` protocol, making them drop-in replaceable via the `COV_METHOD` config key. Ledoit-Wolf is the default because it consistently produces better-conditioned matrices (lower condition number) even when the number of observations is only a few multiples of the number of assets, which is the typical regime for monthly-rebalanced strategies with a lookback of 252 days and 12 assets.
+where the optimal shrinkage intensity **α** is derived analytically, requiring no cross-validation. I expose three swappable estimators — `SampleCovariance`, `LedoitWolfCovariance`, and `EWMACovariance` — all behind a common `estimate(returns) → pd.DataFrame` protocol, making them drop-in replaceable via the `COV_METHOD` config key. Ledoit-Wolf is the default because it consistently produces better-conditioned matrices (lower condition number) even when the number of observations is only a few multiples of the number of assets, which is the typical regime for monthly-rebalanced strategies with a lookback of 252 days and 12 assets.
 
 ### Monte Carlo Simulation
 
@@ -200,7 +210,7 @@ The Monte Carlo engine generates 50,000 forward paths of 252 trading days each. 
 
 MIT License
 
-Copyright (c) 2025
+Copyright (c) 2026 Siddhant Choudhary
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
