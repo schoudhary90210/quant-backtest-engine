@@ -55,6 +55,7 @@ class RiskReport:
 # Individual metric functions
 # ---------------------------------------------------------------------------
 
+
 def annualized_return(daily_returns: pd.Series) -> float:
     """
     Compound annualized return from a series of daily returns.
@@ -110,7 +111,7 @@ def sortino_ratio(
     downside = excess[excess < 0]
     if len(downside) == 0:
         return np.inf
-    downside_std = float(np.sqrt((downside ** 2).mean()) * np.sqrt(TRADING_DAYS))
+    downside_std = float(np.sqrt((downside**2).mean()) * np.sqrt(TRADING_DAYS))
     if downside_std == 0.0:
         return 0.0
     ann_excess = float(excess.mean() * TRADING_DAYS)
@@ -207,6 +208,7 @@ def profit_factor(daily_returns: pd.Series) -> float:
 # ---------------------------------------------------------------------------
 # Composite report
 # ---------------------------------------------------------------------------
+
 
 def compute_risk_report(
     daily_returns: pd.Series,

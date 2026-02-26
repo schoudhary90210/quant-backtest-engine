@@ -37,15 +37,13 @@ class TestMonteCarloShape:
 
     def test_store_paths_shape(self):
         ret = _sample_returns()
-        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42,
-                                  store_paths=True)
+        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42, store_paths=True)
         assert result.equity_paths is not None
         assert result.equity_paths.shape == (50, 31)  # n_days+1
 
     def test_no_store_paths_is_none(self):
         ret = _sample_returns()
-        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42,
-                                  store_paths=False)
+        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42, store_paths=False)
         assert result.equity_paths is None
 
 
@@ -53,8 +51,14 @@ class TestMonteCarloStats:
     def test_all_paths_start_at_capital(self):
         ret = _sample_returns()
         capital = 1_000_000
-        result = run_monte_carlo(ret, n_paths=100, n_days=50, seed=42,
-                                  store_paths=True, initial_capital=capital)
+        result = run_monte_carlo(
+            ret,
+            n_paths=100,
+            n_days=50,
+            seed=42,
+            store_paths=True,
+            initial_capital=capital,
+        )
         np.testing.assert_array_equal(result.equity_paths[:, 0], capital)
 
     def test_positive_drift_prob_profit_high(self):
@@ -89,23 +93,20 @@ class TestMonteCarloStats:
 class TestUnderwaterPeriods:
     def test_requires_store_paths(self):
         ret = _sample_returns()
-        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42,
-                                  store_paths=False)
+        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42, store_paths=False)
         with pytest.raises(ValueError, match="store_paths"):
             result.underwater_periods()
 
     def test_returns_array_of_correct_length(self):
         ret = _sample_returns()
-        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42,
-                                  store_paths=True)
+        result = run_monte_carlo(ret, n_paths=50, n_days=30, seed=42, store_paths=True)
         periods = result.underwater_periods()
         assert len(periods) == 50
 
     def test_all_positive_drift_zero_underwater(self):
         """Paths with strong positive returns should never go underwater."""
         ret = pd.Series([0.01] * 100)  # 1% daily — never below start
-        result = run_monte_carlo(ret, n_paths=200, n_days=50, seed=42,
-                                  store_paths=True)
+        result = run_monte_carlo(ret, n_paths=200, n_days=50, seed=42, store_paths=True)
         periods = result.underwater_periods()
         assert (periods == 0).all()
 

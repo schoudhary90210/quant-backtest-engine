@@ -37,9 +37,7 @@ class TestComputeLogReturns:
 
     def test_single_asset(self):
         dates = pd.bdate_range("2020-01-01", periods=10)
-        prices = pd.DataFrame(
-            {"SOLO": np.linspace(100, 110, 10)}, index=dates
-        )
+        prices = pd.DataFrame({"SOLO": np.linspace(100, 110, 10)}, index=dates)
         ret = compute_log_returns(prices)
         assert ret.shape == (9, 1)
         assert not ret.isna().any().any()
@@ -66,9 +64,7 @@ class TestHandleMissing:
 
     def test_drop_method(self):
         dates = pd.bdate_range("2020-01-01", periods=5)
-        ret = pd.DataFrame(
-            {"A": [0.01, np.nan, 0.02, 0.03, np.nan]}, index=dates
-        )
+        ret = pd.DataFrame({"A": [0.01, np.nan, 0.02, 0.03, np.nan]}, index=dates)
         cleaned = handle_missing(ret, method="drop")
         assert len(cleaned) == 3
         assert not cleaned.isna().any().any()

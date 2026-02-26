@@ -22,7 +22,10 @@ import pandas as pd
 import config as cfg
 from src.data.returns import compute_log_returns
 from src.engine.backtest import BacktestResult, run_backtest
-from src.optimization.black_litterman import BlackLittermanConfig, BlackLittermanEstimator
+from src.optimization.black_litterman import (
+    BlackLittermanConfig,
+    BlackLittermanEstimator,
+)
 from src.optimization.covariance import LedoitWolfCovariance
 from src.optimization.kelly import kelly_weights
 from src.optimization.signals import make_kelly_signal
@@ -58,7 +61,7 @@ class WalkForwardConfig:
     """
 
     min_train_days: int = 756
-    rebalance_freq: str = "M"   # "M" = monthly cadence
+    rebalance_freq: str = "M"  # "M" = monthly cadence
     start_date: str = cfg.START_DATE
     end_date: str = cfg.END_DATE
 
@@ -349,7 +352,7 @@ def _walk_forward_signal(
 
     def signal_fn(
         date: pd.Timestamp,
-        prices: pd.DataFrame,          # not used — prevents any future lookahead
+        prices: pd.DataFrame,  # not used — prevents any future lookahead
         current_weights: pd.Series,
     ) -> pd.Series:
         available = weight_history.loc[weight_history.index <= date]

@@ -70,9 +70,7 @@ def generate_momentum_views(
         Diagonal view-uncertainty matrix.
     """
     if not 0.0 < view_confidence < 1.0:
-        raise ValueError(
-            f"view_confidence must be in (0, 1), got {view_confidence}"
-        )
+        raise ValueError(f"view_confidence must be in (0, 1), got {view_confidence}")
 
     N = returns.shape[1]
     P = np.eye(N)
@@ -80,8 +78,8 @@ def generate_momentum_views(
     # Trailing annualised return: sum of log returns over min(lookback, T) days,
     # then scale up to a full year if the window is shorter than lookback.
     window = min(lookback, len(returns))
-    raw_total = returns.iloc[-window:].sum().values            # total log ret
-    Q = raw_total * (float(lookback) / float(window))          # annualise
+    raw_total = returns.iloc[-window:].sum().values  # total log ret
+    Q = raw_total * (float(lookback) / float(window))  # annualise
 
     # Omega_ii = [(1 / confidence) - 1] * tau * Sigma_ii
     # This makes the prior contribution = (1 - view_confidence) of the total.

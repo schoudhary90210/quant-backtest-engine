@@ -71,7 +71,9 @@ def classify_regimes(
 
     regimes = pd.Series(index=daily_returns.index, dtype=object)
     regimes[rolling_vol < bull_threshold] = "bull"
-    regimes[(rolling_vol >= bull_threshold) & (rolling_vol < sideways_threshold)] = "sideways"
+    regimes[(rolling_vol >= bull_threshold) & (rolling_vol < sideways_threshold)] = (
+        "sideways"
+    )
     regimes[rolling_vol >= sideways_threshold] = "bear"
 
     return regimes

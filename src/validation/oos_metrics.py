@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from src.risk.metrics import RiskReport
 
-OVERFITTING_THRESHOLD = 0.50   # warn if OOS Sharpe < 50% of IS Sharpe
+OVERFITTING_THRESHOLD = 0.50  # warn if OOS Sharpe < 50% of IS Sharpe
 
 
 def compare_is_oos(
@@ -52,21 +52,24 @@ def compare_is_oos(
         return f"{v:>10.3f}"
 
     rows: list[tuple[str, float, float, object]] = [
-        ("CAGR",             is_metrics.annualized_return,    oos_metrics.annualized_return,    _pct),
-        ("Sharpe Ratio",     is_metrics.sharpe_ratio,         oos_metrics.sharpe_ratio,         _ratio),
-        ("Sortino Ratio",    is_metrics.sortino_ratio,        oos_metrics.sortino_ratio,        _ratio),
-        ("Max Drawdown",     is_metrics.max_drawdown,         oos_metrics.max_drawdown,         _pct),
-        ("Calmar Ratio",     is_metrics.calmar_ratio,         oos_metrics.calmar_ratio,         _ratio),
-        ("Ann. Volatility",  is_metrics.annualized_volatility, oos_metrics.annualized_volatility, _pct),
-        ("VaR 95%",          is_metrics.var_95,               oos_metrics.var_95,               _pct),
-        ("Win Rate",         is_metrics.win_rate,             oos_metrics.win_rate,             _pct),
+        ("CAGR", is_metrics.annualized_return, oos_metrics.annualized_return, _pct),
+        ("Sharpe Ratio", is_metrics.sharpe_ratio, oos_metrics.sharpe_ratio, _ratio),
+        ("Sortino Ratio", is_metrics.sortino_ratio, oos_metrics.sortino_ratio, _ratio),
+        ("Max Drawdown", is_metrics.max_drawdown, oos_metrics.max_drawdown, _pct),
+        ("Calmar Ratio", is_metrics.calmar_ratio, oos_metrics.calmar_ratio, _ratio),
+        (
+            "Ann. Volatility",
+            is_metrics.annualized_volatility,
+            oos_metrics.annualized_volatility,
+            _pct,
+        ),
+        ("VaR 95%", is_metrics.var_95, oos_metrics.var_95, _pct),
+        ("Win Rate", is_metrics.win_rate, oos_metrics.win_rate, _pct),
     ]
 
     for label, is_val, oos_val, fmt in rows:
         delta = oos_val - is_val
-        lines.append(
-            f"  {label:<26} {fmt(is_val)}  {fmt(oos_val)}  {fmt(delta)}"
-        )
+        lines.append(f"  {label:<26} {fmt(is_val)}  {fmt(oos_val)}  {fmt(delta)}")
 
     lines.append("  " + "-" * (w - 2))
 

@@ -13,10 +13,10 @@ from src.optimization.covariance import (
     get_covariance_estimator,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_returns(n_days: int = 500, n_assets: int = 3, seed: int = 42) -> pd.DataFrame:
     np.random.seed(seed)
@@ -29,42 +29,79 @@ def _make_returns(n_days: int = 500, n_assets: int = 3, seed: int = 42) -> pd.Da
 # Shared interface tests
 # ---------------------------------------------------------------------------
 
+
 class TestSharedInterface:
     """All three estimators should produce valid N×N PSD matrices."""
 
-    @pytest.mark.parametrize("EstimatorClass", [
-        SampleCovariance, LedoitWolfCovariance, EWMACovariance,
-    ])
+    @pytest.mark.parametrize(
+        "EstimatorClass",
+        [
+            SampleCovariance,
+            LedoitWolfCovariance,
+            EWMACovariance,
+        ],
+    )
     def test_output_shape(self, EstimatorClass):
         returns = _make_returns(n_assets=4)
-        estimator = EstimatorClass() if EstimatorClass != EWMACovariance else EstimatorClass(decay=0.94)
+        estimator = (
+            EstimatorClass()
+            if EstimatorClass != EWMACovariance
+            else EstimatorClass(decay=0.94)
+        )
         cov = estimator.estimate(returns)
         assert cov.shape == (4, 4)
         assert list(cov.index) == list(cov.columns)
 
-    @pytest.mark.parametrize("EstimatorClass", [
-        SampleCovariance, LedoitWolfCovariance, EWMACovariance,
-    ])
+    @pytest.mark.parametrize(
+        "EstimatorClass",
+        [
+            SampleCovariance,
+            LedoitWolfCovariance,
+            EWMACovariance,
+        ],
+    )
     def test_symmetric(self, EstimatorClass):
         returns = _make_returns()
-        estimator = EstimatorClass() if EstimatorClass != EWMACovariance else EstimatorClass(decay=0.94)
+        estimator = (
+            EstimatorClass()
+            if EstimatorClass != EWMACovariance
+            else EstimatorClass(decay=0.94)
+        )
         cov = estimator.estimate(returns)
         np.testing.assert_allclose(cov.values, cov.values.T, atol=1e-12)
 
-    @pytest.mark.parametrize("EstimatorClass", [
-        SampleCovariance, LedoitWolfCovariance, EWMACovariance,
-    ])
+    @pytest.mark.parametrize(
+        "EstimatorClass",
+        [
+            SampleCovariance,
+            LedoitWolfCovariance,
+            EWMACovariance,
+        ],
+    )
     def test_positive_diagonal(self, EstimatorClass):
         returns = _make_returns()
-        estimator = EstimatorClass() if EstimatorClass != EWMACovariance else EstimatorClass(decay=0.94)
+        estimator = (
+            EstimatorClass()
+            if EstimatorClass != EWMACovariance
+            else EstimatorClass(decay=0.94)
+        )
         cov = estimator.estimate(returns)
         assert (np.diag(cov.values) > 0).all()
 
-    @pytest.mark.parametrize("EstimatorClass", [
-        SampleCovariance, LedoitWolfCovariance, EWMACovariance,
-    ])
+    @pytest.mark.parametrize(
+        "EstimatorClass",
+        [
+            SampleCovariance,
+            LedoitWolfCovariance,
+            EWMACovariance,
+        ],
+    )
     def test_empty_raises(self, EstimatorClass):
-        estimator = EstimatorClass() if EstimatorClass != EWMACovariance else EstimatorClass(decay=0.94)
+        estimator = (
+            EstimatorClass()
+            if EstimatorClass != EWMACovariance
+            else EstimatorClass(decay=0.94)
+        )
         with pytest.raises(ValueError, match="empty"):
             estimator.estimate(pd.DataFrame())
 

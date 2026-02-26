@@ -14,10 +14,10 @@ from src.engine.backtest import (
 )
 from src.engine.costs import TransactionCostModel
 
-
 # ---------------------------------------------------------------------------
 # Helpers — simple signal functions for testing
 # ---------------------------------------------------------------------------
+
 
 def equal_weight_signal(date, prices, current_weights):
     """Always return equal weights across all assets."""
@@ -40,6 +40,7 @@ def zero_weight_signal(date, prices, current_weights):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestPortfolioState:
 
@@ -112,7 +113,8 @@ class TestRunBacktest:
     def test_equal_weight_basic(self):
         prices = self._make_prices()
         result = run_backtest(
-            prices, equal_weight_signal,
+            prices,
+            equal_weight_signal,
             initial_capital=1_000_000,
             rebalance_freq="daily",
         )
@@ -124,7 +126,8 @@ class TestRunBacktest:
     def test_equity_never_negative(self):
         prices = self._make_prices(n_days=252, drift=-0.001)
         result = run_backtest(
-            prices, equal_weight_signal,
+            prices,
+            equal_weight_signal,
             rebalance_freq="daily",
         )
         assert (result.equity_curve > 0).all()
@@ -132,7 +135,8 @@ class TestRunBacktest:
     def test_single_asset_portfolio(self):
         prices = self._make_prices(n_assets=1)
         result = run_backtest(
-            prices, single_asset_signal,
+            prices,
+            single_asset_signal,
             rebalance_freq="daily",
         )
         assert len(result.positions.columns) == 1
@@ -143,7 +147,8 @@ class TestRunBacktest:
         """All-cash portfolio should stay flat (minus any tiny float issues)."""
         prices = self._make_prices()
         result = run_backtest(
-            prices, zero_weight_signal,
+            prices,
+            zero_weight_signal,
             initial_capital=1_000_000,
             rebalance_freq="daily",
             cost_model=TransactionCostModel(cost_bps=0, slippage_bps=0),
@@ -167,12 +172,20 @@ class TestRunBacktest:
         high_cost = TransactionCostModel(cost_bps=50, slippage_bps=25)
 
         result_free = run_backtest(
-            prices, equal_weight_signal, rebalance_freq="daily", cost_model=no_cost,
+            prices,
+            equal_weight_signal,
+            rebalance_freq="daily",
+            cost_model=no_cost,
         )
         result_expensive = run_backtest(
-            prices, equal_weight_signal, rebalance_freq="daily", cost_model=high_cost,
+            prices,
+            equal_weight_signal,
+            rebalance_freq="daily",
+            cost_model=high_cost,
         )
-        assert result_expensive.equity_curve.iloc[-1] < result_free.equity_curve.iloc[-1]
+        assert (
+            result_expensive.equity_curve.iloc[-1] < result_free.equity_curve.iloc[-1]
+        )
 
     def test_empty_prices_raises(self):
         with pytest.raises(ValueError, match="empty"):
@@ -191,7 +204,9 @@ class TestRunBacktest:
         """On rebalance days, weights should sum to ~1 for fully invested."""
         prices = self._make_prices()
         result = run_backtest(
-            prices, equal_weight_signal, rebalance_freq="daily",
+            prices,
+            equal_weight_signal,
+            rebalance_freq="daily",
             cost_model=TransactionCostModel(cost_bps=0, slippage_bps=0),
         )
         weight_sums = result.positions.sum(axis=1)

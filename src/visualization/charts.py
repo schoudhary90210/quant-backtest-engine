@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")  # non-interactive backend — safe for scripts
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -24,10 +25,10 @@ CHART_DIR = Path(config.CHART_DIR)
 DPI = config.CHART_DPI
 
 COLORS = {
-    "half_kelly": "#2196F3",   # blue
-    "full_kelly": "#9C27B0",   # purple
-    "equal_weight": "#FF9800", # orange
-    "drawdown": "#F44336",     # red
+    "half_kelly": "#2196F3",  # blue
+    "full_kelly": "#9C27B0",  # purple
+    "equal_weight": "#FF9800",  # orange
+    "drawdown": "#F44336",  # red
     "mc_median": "#1E88E5",
     "mc_band": "#90CAF9",
     "grid": "#E0E0E0",
@@ -45,6 +46,7 @@ def _save(fig: plt.Figure, name: str) -> Path:
 # ---------------------------------------------------------------------------
 # 1. Equity curve comparison
 # ---------------------------------------------------------------------------
+
 
 def plot_equity_curves(
     results: dict[str, pd.Series],
@@ -64,7 +66,7 @@ def plot_equity_curves(
 
     color_map = {
         "Half-Kelly": COLORS["half_kelly"],
-        "Full Kelly":  COLORS["full_kelly"],
+        "Full Kelly": COLORS["full_kelly"],
         "Equal Weight": COLORS["equal_weight"],
     }
 
@@ -74,7 +76,9 @@ def plot_equity_curves(
         ax.plot(normalised.index, normalised, label=name, color=color, linewidth=1.6)
 
     ax.axhline(1.0, color="#9E9E9E", linewidth=0.8, linestyle="--")
-    ax.set_title("Portfolio Equity Curves (Normalised to 1.0)", fontsize=14, fontweight="bold")
+    ax.set_title(
+        "Portfolio Equity Curves (Normalised to 1.0)", fontsize=14, fontweight="bold"
+    )
     ax.set_ylabel("Portfolio Value (×)")
     ax.set_xlabel("Date")
     ax.legend(framealpha=0.9)
@@ -87,6 +91,7 @@ def plot_equity_curves(
 # ---------------------------------------------------------------------------
 # 2. Monte Carlo fan chart
 # ---------------------------------------------------------------------------
+
 
 def plot_monte_carlo_fan(
     equity_paths: np.ndarray,
@@ -109,7 +114,7 @@ def plot_monte_carlo_fan(
     norm = equity_paths / initial_capital
     days = np.arange(norm.shape[1])
 
-    p5  = np.percentile(norm, 5,  axis=0)
+    p5 = np.percentile(norm, 5, axis=0)
     p25 = np.percentile(norm, 25, axis=0)
     p50 = np.percentile(norm, 50, axis=0)
     p75 = np.percentile(norm, 75, axis=0)
@@ -117,12 +122,22 @@ def plot_monte_carlo_fan(
 
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    ax.fill_between(days, p5,  p95, alpha=0.15, color=COLORS["mc_band"], label="5–95th pct")
-    ax.fill_between(days, p25, p75, alpha=0.30, color=COLORS["mc_band"], label="25–75th pct")
+    ax.fill_between(
+        days, p5, p95, alpha=0.15, color=COLORS["mc_band"], label="5–95th pct"
+    )
+    ax.fill_between(
+        days, p25, p75, alpha=0.30, color=COLORS["mc_band"], label="25–75th pct"
+    )
     ax.plot(days, p50, color=COLORS["mc_median"], linewidth=2.0, label="Median")
-    ax.axhline(1.0, color="#9E9E9E", linewidth=0.8, linestyle="--", label="Initial capital")
+    ax.axhline(
+        1.0, color="#9E9E9E", linewidth=0.8, linestyle="--", label="Initial capital"
+    )
 
-    ax.set_title("Monte Carlo Forward Simulation — Half-Kelly (1 Year)", fontsize=14, fontweight="bold")
+    ax.set_title(
+        "Monte Carlo Forward Simulation — Half-Kelly (1 Year)",
+        fontsize=14,
+        fontweight="bold",
+    )
     ax.set_xlabel("Trading Days")
     ax.set_ylabel("Portfolio Value (×)")
     ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: f"{x:.1f}×"))
@@ -135,6 +150,7 @@ def plot_monte_carlo_fan(
 # ---------------------------------------------------------------------------
 # 3. Rolling Sharpe ratio
 # ---------------------------------------------------------------------------
+
 
 def plot_rolling_sharpe(
     returns_dict: dict[str, pd.Series],
@@ -160,16 +176,14 @@ def plot_rolling_sharpe(
 
     color_map = {
         "Half-Kelly": COLORS["half_kelly"],
-        "Full Kelly":  COLORS["full_kelly"],
+        "Full Kelly": COLORS["full_kelly"],
         "Equal Weight": COLORS["equal_weight"],
     }
 
     for name, returns in returns_dict.items():
         excess = returns - risk_free_rate / 252
         rolling = (
-            excess.rolling(window).mean()
-            / excess.rolling(window).std()
-            * np.sqrt(252)
+            excess.rolling(window).mean() / excess.rolling(window).std() * np.sqrt(252)
         )
         color = color_map.get(name, "#607D8B")
         ax.plot(rolling.index, rolling, label=name, color=color, linewidth=1.4)
@@ -187,6 +201,7 @@ def plot_rolling_sharpe(
 # ---------------------------------------------------------------------------
 # 4. Drawdown chart
 # ---------------------------------------------------------------------------
+
 
 def plot_drawdowns(
     results: dict[str, pd.Series],
@@ -206,7 +221,7 @@ def plot_drawdowns(
 
     color_map = {
         "Half-Kelly": COLORS["half_kelly"],
-        "Full Kelly":  COLORS["full_kelly"],
+        "Full Kelly": COLORS["full_kelly"],
         "Equal Weight": COLORS["equal_weight"],
     }
 
@@ -231,6 +246,7 @@ def plot_drawdowns(
 # 5. Monthly returns heatmap
 # ---------------------------------------------------------------------------
 
+
 def plot_monthly_heatmap(
     daily_returns: pd.Series,
     strategy_name: str = "Half-Kelly",
@@ -248,19 +264,25 @@ def plot_monthly_heatmap(
     filename : str
         Output file name.
     """
-    monthly = (
-        (1 + daily_returns)
-        .resample("ME")
-        .prod()
-        .sub(1)
-        .mul(100)
-    )
+    monthly = (1 + daily_returns).resample("ME").prod().sub(1).mul(100)
     monthly.index = monthly.index.to_period("M")
 
-    years  = sorted(monthly.index.year.unique())
+    years = sorted(monthly.index.year.unique())
     months = list(range(1, 13))
-    month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    month_labels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
 
     grid = pd.DataFrame(index=years, columns=months, dtype=float)
     for period, val in monthly.items():
@@ -268,7 +290,11 @@ def plot_monthly_heatmap(
 
     fig, ax = plt.subplots(figsize=(14, max(4, len(years) * 0.55)))
 
-    vmax = max(abs(grid.values[~np.isnan(grid.values)])) if grid.notna().any().any() else 10
+    vmax = (
+        max(abs(grid.values[~np.isnan(grid.values)]))
+        if grid.notna().any().any()
+        else 10
+    )
     cmap = plt.cm.RdYlGn
     norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0, vmax=vmax)
 
@@ -284,11 +310,21 @@ def plot_monthly_heatmap(
             val = grid.loc[year, month]
             if not np.isnan(val):
                 text_color = "black" if abs(val) < vmax * 0.6 else "white"
-                ax.text(j, i, f"{val:.1f}%", ha="center", va="center",
-                        fontsize=7.5, color=text_color, fontweight="bold")
+                ax.text(
+                    j,
+                    i,
+                    f"{val:.1f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=7.5,
+                    color=text_color,
+                    fontweight="bold",
+                )
 
     plt.colorbar(im, ax=ax, label="Monthly Return (%)", shrink=0.8)
-    ax.set_title(f"Monthly Returns Heatmap — {strategy_name}", fontsize=14, fontweight="bold")
+    ax.set_title(
+        f"Monthly Returns Heatmap — {strategy_name}", fontsize=14, fontweight="bold"
+    )
     fig.tight_layout()
     return _save(fig, filename)
 
@@ -331,15 +367,23 @@ def plot_weight_evolution(
     fig, ax = plt.subplots(figsize=(14, 6))
     ax.stackplot(pos.index, pos.values.T, labels=col_order, colors=colors, alpha=0.85)
 
-    ax.set_title(f"Portfolio Weight Allocation — {strategy_name}", fontsize=14, fontweight="bold")
+    ax.set_title(
+        f"Portfolio Weight Allocation — {strategy_name}", fontsize=14, fontweight="bold"
+    )
     ax.set_xlabel("Date")
     ax.set_ylabel("Weight")
     ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: f"{x:.0%}"))
     ax.set_ylim(0, 1)
 
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles[::-1], labels[::-1], loc="upper left",
-              bbox_to_anchor=(1.01, 1), fontsize=8, framealpha=0.9)
+    ax.legend(
+        handles[::-1],
+        labels[::-1],
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1),
+        fontsize=8,
+        framealpha=0.9,
+    )
     fig.tight_layout()
     return _save(fig, filename)
 
@@ -375,31 +419,39 @@ def plot_is_vs_oos_equity(
     """
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    is_norm  = is_equity  / is_equity.iloc[0]
+    is_norm = is_equity / is_equity.iloc[0]
     oos_norm = oos_equity / oos_equity.iloc[0]
 
     ax.plot(
-        is_norm.index, is_norm,
+        is_norm.index,
+        is_norm,
         label="In-Sample (Half-Kelly)",
-        color=COLORS["half_kelly"], linewidth=1.6,
+        color=COLORS["half_kelly"],
+        linewidth=1.6,
     )
     ax.plot(
-        oos_norm.index, oos_norm,
+        oos_norm.index,
+        oos_norm,
         label="Out-of-Sample (Walk-Forward)",
-        color="#4CAF50", linewidth=1.6, linestyle="--",
+        color="#4CAF50",
+        linewidth=1.6,
+        linestyle="--",
     )
 
     if oos_start_date is not None:
         ax.axvline(
             oos_start_date,
-            color="#9E9E9E", linewidth=1.0, linestyle=":",
+            color="#9E9E9E",
+            linewidth=1.0,
+            linestyle=":",
             label=f"OOS start ({oos_start_date.strftime('%Y-%m')})",
         )
 
     ax.axhline(1.0, color="#9E9E9E", linewidth=0.8, linestyle="--")
     ax.set_title(
         "In-Sample vs Out-of-Sample Equity Curves",
-        fontsize=14, fontweight="bold",
+        fontsize=14,
+        fontweight="bold",
     )
     ax.set_ylabel("Portfolio Value (×)")
     ax.set_xlabel("Date")
@@ -433,9 +485,9 @@ def plot_return_estimator_comparison(
         Output file name.
     """
     palette = {
-        "Equal Weight":          COLORS["equal_weight"],
+        "Equal Weight": COLORS["equal_weight"],
         "Historical Mean + Kelly": COLORS["half_kelly"],
-        "BL + Kelly":            "#4CAF50",     # green
+        "BL + Kelly": "#4CAF50",  # green
     }
 
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -450,7 +502,8 @@ def plot_return_estimator_comparison(
     ax.axhline(1.0, color="#9E9E9E", linewidth=0.8, linestyle="--")
     ax.set_title(
         "Return Estimator Comparison — Historical Mean vs Black-Litterman",
-        fontsize=14, fontweight="bold",
+        fontsize=14,
+        fontweight="bold",
     )
     ax.set_ylabel("Portfolio Value (×)")
     ax.set_xlabel("Date")

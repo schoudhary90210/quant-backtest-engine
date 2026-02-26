@@ -18,13 +18,13 @@ def _vol_returns(annualized_vol: float, n: int = 252) -> pd.Series:
 
 class TestClassifyRegimes:
     def test_low_vol_is_bull(self):
-        ret = _vol_returns(0.05, n=500)   # 5% vol → bull
+        ret = _vol_returns(0.05, n=500)  # 5% vol → bull
         regimes = classify_regimes(ret, window=60)
         valid = regimes.dropna()
         assert (valid == "bull").all()
 
     def test_high_vol_is_bear(self):
-        ret = _vol_returns(0.40, n=500)   # 40% vol → bear
+        ret = _vol_returns(0.40, n=500)  # 40% vol → bear
         regimes = classify_regimes(ret, window=60)
         valid = regimes.dropna()
         assert (valid == "bear").all()

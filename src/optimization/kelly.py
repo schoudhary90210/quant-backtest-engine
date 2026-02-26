@@ -66,7 +66,9 @@ def kelly_weights(
     # ── Zero out assets with negative expected excess return ──
     mask = excess > 0
     if not mask.any():
-        logger.warning("All assets have negative excess returns; returning zero weights")
+        logger.warning(
+            "All assets have negative excess returns; returning zero weights"
+        )
         return pd.Series(0.0, index=tickers)
 
     # Work only with positive-excess-return assets

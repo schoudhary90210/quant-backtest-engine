@@ -35,7 +35,7 @@ class TestAnnualizedReturn:
     def test_positive_drift(self):
         ret = _flat_returns(252, 0.001)
         ann = annualized_return(ret)
-        expected = (1.001 ** 252) - 1
+        expected = (1.001**252) - 1
         assert abs(ann - expected) < 1e-10
 
     def test_empty_returns_zero(self):

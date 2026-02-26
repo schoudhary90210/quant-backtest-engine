@@ -1,38 +1,44 @@
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-141%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-175%20passing-brightgreen?style=flat-square)
 
 # Quantitative Backtesting & Portfolio Optimization Engine
 
-I built this to find out whether Kelly Criterion portfolio optimization actually beats a simple equal-weight strategy on real market data — not in theory, not on toy examples, but on 12 real assets over 11 years with realistic transaction costs. The short answer is yes, and by a lot. The longer answer is in the results below.
-
----
-
-## Motivation
-
-I kept reading about Kelly Criterion in trading books and papers and everyone either dismissed it as too aggressive or used it on single-asset examples with made-up numbers. I wanted to see what happens when you apply the full multi-asset version — with proper covariance estimation, position constraints, and real transaction costs — to a diversified portfolio. I also wanted to build the infrastructure properly: event-driven backtester, parquet caching, full risk metrics, Monte Carlo forward simulation. Partly to learn, partly because most open-source backtesting code I'd seen was either too simple to trust or too complex to understand. This sits somewhere in the middle.
+I built this to find out whether Kelly Criterion portfolio optimization actually beats a simple equal-weight strategy on real market data — not in theory, not on toy examples, but on 12 real assets over 11 years with realistic transaction costs. Then I extended it with a Black-Litterman return estimator and anchored walk-forward validation to check whether the results were genuinely out-of-sample robust. The short answer to both questions is yes. The full infrastructure: event-driven backtester, Ledoit-Wolf covariance, BL posterior returns, parquet caching, Monte Carlo forward simulation, and a walk-forward validation loop that is no-lookahead by construction.
 
 ---
 
 ## Results
 
+### In-Sample (2014–2025, full period)
+
 | Strategy | CAGR | Sharpe | Sortino | Max Drawdown | Calmar |
 |---|---|---|---|---|---|
 | Equal Weight (1/N) | 13.2% | 0.478 | 0.458 | -27.8% | 0.321 |
-| **Half-Kelly** | **33.0%** | **0.921** | **0.977** | **-29.1%** | **0.747** |
+| Half-Kelly (Historical Mean) | 33.0% | 0.921 | 0.977 | -29.1% | 0.747 |
 | Full Kelly | 33.1% | 0.916 | 0.970 | -31.9% | 0.683 |
+| **BL + Kelly** | **30.8%** | **0.865** | — | **-32.7%** | — |
 
-*Universe: SPY, QQQ, IWM, EFA, TLT, IEF, GLD, SLV, USO, BTC-USD, DBA, VNQ — monthly rebalance — 10 bps commission + 5 bps slippage.*
+### Walk-Forward Out-of-Sample (BL + Kelly, OOS start 2016-11)
+
+| | In-Sample | Out-of-Sample | Ratio |
+|---|---|---|---|
+| Sharpe Ratio | 0.865 | 0.800 | 92% — [OK] |
+
+*Universe: SPY, QQQ, IWM, EFA, TLT, IEF, GLD, SLV, USO, BTC-USD, DBA, VNQ — monthly rebalance — 10 bps commission + 5 bps slippage. Walk-forward uses an expanding window anchored at the first price date; no future data is ever visible to the weight estimator.*
 
 ---
 
 ## Charts
 
-### Equity Curves
+### Equity Curves (Equal Weight / Half-Kelly / Full Kelly)
 ![Equity Curves](output/charts/equity_curves.png)
 
-### Monthly Returns Heatmap (Half-Kelly)
-![Monthly Returns Heatmap](output/charts/monthly_heatmap.png)
+### Return Estimator Comparison (Historical Mean vs Black-Litterman)
+![Return Estimator Comparison](output/charts/return_estimator_comparison.png)
+
+### In-Sample vs Out-of-Sample Equity Curves (Walk-Forward)
+![IS vs OOS](output/charts/is_vs_oos_equity.png)
 
 ### Monte Carlo Fan Chart (1-Year Forward, 50,000 Paths)
 ![Monte Carlo](output/charts/monte_carlo_fan.png)
@@ -40,8 +46,11 @@ I kept reading about Kelly Criterion in trading books and papers and everyone ei
 ### Rolling 252-Day Sharpe Ratio
 ![Rolling Sharpe](output/charts/rolling_sharpe.png)
 
-### Drawdowns
+### Portfolio Drawdowns
 ![Drawdowns](output/charts/drawdowns.png)
+
+### Monthly Returns Heatmap (Half-Kelly)
+![Monthly Returns Heatmap](output/charts/monthly_heatmap.png)
 
 ### Portfolio Weight Allocation Over Time
 ![Weight Evolution](output/charts/weight_evolution.png)
@@ -49,6 +58,27 @@ I kept reading about Kelly Criterion in trading books and papers and everyone ei
 ---
 
 ## Architecture
+
+```mermaid
+flowchart TD
+    A[Yahoo Finance API] -->|yfinance + parquet cache| B[fetcher.py]
+    B --> C[returns.py\nlog returns]
+    C --> D[covariance.py\nLedoit-Wolf / EWMA]
+    C --> E[black_litterman.py\nBL posterior μ]
+    C --> F[equal_weight.py\n1/N benchmark]
+    D --> E
+    D --> G[kelly.py\nΣ⁻¹μ weights]
+    E --> G
+    F --> H[backtest.py\nevent-driven loop]
+    G -->|signals.py| H
+    H --> I[costs.py\n10bps + 5bps slippage]
+    H --> J[metrics.py\nSharpe / VaR / Calmar]
+    H --> K[simulation.py\n50k Monte Carlo paths]
+    H --> L[walk_forward.py\nexpanding-window OOS]
+    J --> M[charts.py + report.py]
+    K --> M
+    L --> M
+```
 
 ```
 quant-backtest-engine/
@@ -68,6 +98,8 @@ quant-backtest-engine/
 │   ├── optimization/
 │   │   ├── covariance.py         # Sample / Ledoit-Wolf / EWMA estimators
 │   │   ├── kelly.py              # Multi-asset Kelly criterion optimizer
+│   │   ├── black_litterman.py    # BL return estimator (equilibrium + views)
+│   │   ├── views.py              # Momentum view generation (P, Q, Ω)
 │   │   ├── equal_weight.py       # 1/N benchmark strategy
 │   │   └── signals.py            # Signal factories (wraps optimizers)
 │   │
@@ -78,41 +110,22 @@ quant-backtest-engine/
 │   ├── monte_carlo/
 │   │   └── simulation.py         # Vectorized 50k-path forward simulator
 │   │
+│   ├── validation/
+│   │   ├── walk_forward.py       # Anchored expanding-window OOS validation
+│   │   └── oos_metrics.py        # IS vs OOS comparison table
+│   │
 │   └── visualization/
-│       ├── charts.py             # 6 publication-quality matplotlib charts
+│       ├── charts.py             # 8 publication-quality matplotlib charts
 │       └── report.py             # Text report generator
 │
-├── tests/                        # 141 pytest tests (100% passing)
+├── tests/                        # 175 pytest tests (100% passing)
 ├── data/cache/                   # Parquet price cache (git-ignored)
 └── output/                       # Charts + report (git-ignored)
 ```
 
-**Data flow:**
-
-```
-Yahoo Finance → fetcher.py → parquet cache
-                    ↓
-             returns.py (log returns)
-                    ↓
-        ┌───────────┴───────────┐
-   covariance.py           equal_weight.py
-   kelly.py                    │
-        └───────────┬───────────┘
-                signals.py
-                    ↓
-             backtest.py  ←  costs.py
-                    ↓
-        ┌───────────┴───────────┐
-   metrics.py              simulation.py
-   regime.py               (Monte Carlo)
-        └───────────┬───────────┘
-                    ↓
-          charts.py + report.py
-```
-
 ---
 
-## Installation
+## Quick Start
 
 **Requirements:** Python 3.11+
 
@@ -124,39 +137,18 @@ python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
-```
-
----
-
-## Usage
-
-**Run the full pipeline** (fetches data, runs backtests, generates all charts and report):
-
-```bash
 python main.py
 ```
 
-**Run backtests only:**
-
-```bash
-python run_backtest.py
-```
-
-**Run the test suite:**
-
-```bash
-python -m pytest tests/ -v
-```
-
-**Fetch and cache market data only:**
-
-```bash
-python -m src.data.fetcher
-```
-
-All outputs are written to:
-- `output/charts/` — 6 PNG charts at 300 DPI
+Output is written to:
+- `output/charts/` — 8 PNG charts at 300 DPI
 - `output/report.txt` — full risk report
+
+**Run tests:**
+
+```bash
+pytest tests/ -v
+```
 
 ---
 
@@ -176,33 +168,41 @@ MAX_POSITION_WEIGHT = 0.40            # 40% single-asset cap
 MAX_LEVERAGE = 1.5                     # gross exposure cap
 COV_METHOD = "ledoit_wolf"            # 'sample', 'ledoit_wolf', 'ewma'
 MC_NUM_PATHS = 50_000
+BL_RISK_AVERSION = 2.5                # market risk-aversion coefficient δ
+BL_TAU = 0.05                         # prior uncertainty scaling
+BL_VIEW_LOOKBACK = 252                # momentum window for BL views
+```
+
+Pipeline flags in `main.py`:
+
+```python
+WALK_FORWARD = True          # anchored OOS validation (~2 min extra)
+RETURN_ESTIMATOR = "black_litterman"  # or "historical_mean"
 ```
 
 ---
 
 ## Technical Deep Dive
 
-### Kelly Criterion
+### Kelly Criterion (`src/optimization/kelly.py`)
 
-The Kelly Criterion provides the theoretically optimal bet size that maximises the long-run geometric growth rate of a portfolio. For a single asset it simplifies to *f\* = (μ − r) / σ²*, but the multi-asset generalisation I implemented is:
+The Kelly Criterion provides the theoretically optimal bet size that maximises the long-run geometric growth rate. The multi-asset formulation I implement is **f\* = Σ⁻¹(μ − r)**, where **Σ** is the N×N covariance matrix, **μ** is the vector of expected excess returns, and **r** is the risk-free rate. I solve the system via `numpy.linalg.solve` rather than explicit matrix inversion, falling back to `numpy.linalg.lstsq` when the matrix is near-singular. Constraints are applied after solving: zero out assets with negative excess return, clip each position to `MAX_POSITION_WEIGHT` (40%), then scale if gross exposure exceeds `MAX_LEVERAGE` (1.5×). I default to **Half-Kelly (fraction = 0.5)**, which cuts position sizes in half while retaining most of the geometric-growth advantage — the results show essentially identical CAGR to Full Kelly with a materially better Calmar ratio.
 
-**f\* = Σ⁻¹ (μ − r)**
+### Ledoit-Wolf Covariance Shrinkage (`src/optimization/covariance.py`)
 
-where **Σ** is the N×N covariance matrix, **μ** is the vector of expected excess returns, and **r** is the risk-free rate. I solve the system via `numpy.linalg.solve` rather than explicit matrix inversion, which is numerically stable even for near-singular covariances (falling back to least-squares via `numpy.linalg.lstsq` when needed). In practice, full Kelly produces volatile portfolios that are deeply uncomfortable to hold through drawdowns. I default to **Half-Kelly (fraction = 0.5)**, which cuts position sizes in half while retaining most of the geometric-growth advantage — the empirical results above show essentially identical CAGR with materially better drawdown and Calmar ratio compared to Full Kelly.
+The sample covariance matrix has estimation error that grows with N (assets) relative to T (observations), producing extreme and unstable weights. The Ledoit-Wolf (2004) estimator shrinks the sample covariance **S** toward a scaled identity target: **Σ̂ = (1 − α)S + αμI**, where the optimal shrinkage intensity **α** is derived analytically without cross-validation. Three swappable estimators — `SampleCovariance`, `LedoitWolfCovariance`, and `EWMACovariance` — all implement the same `estimate(returns) → pd.DataFrame` protocol and are drop-in replaceable via the `COV_METHOD` config key. Ledoit-Wolf is the default because it consistently produces better-conditioned matrices even in the typical regime of 252 observations × 12 assets.
 
-Constraints are applied in sequence after solving: (1) assets with negative expected excess return over the risk-free rate are zeroed out entirely; (2) each position is clipped to `MAX_POSITION_WEIGHT` (40%); (3) if total gross exposure exceeds `MAX_LEVERAGE` (1.5×), all weights are scaled proportionally. Expected returns are estimated from a rolling `LOOKBACK_WINDOW` (252 days) of historical log returns, annualised by multiplying by 252.
+### Black-Litterman Return Estimator (`src/optimization/black_litterman.py`, `views.py`)
 
-### Ledoit-Wolf Covariance Shrinkage
+The Black-Litterman model replaces raw historical means with a Bayesian posterior that blends an equilibrium prior with investor views. The equilibrium prior is **π = δΣw_mkt**, where w_mkt are market-cap proxy weights from `config.MARKET_CAP_WEIGHTS` and δ = 2.5. I generate absolute momentum views automatically: **P = I** (identity pick matrix), **Q** = trailing 252-day annualised log returns, and **Ω** diagonal with scale = (1/view_confidence − 1)×τ×diag(Σ), giving the prior 75% weight (view_confidence=0.25). The posterior is **μ_BL = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹[(τΣ)⁻¹π + P'Ω⁻¹Q]**, solved entirely via `np.linalg.solve` with no explicit matrix inversion. In practice, BL + Kelly reduces drawdowns slightly vs. raw historical mean + Kelly, at a modest reduction in raw CAGR (30.8% vs. 33.0%), because the equilibrium prior prevents the optimizer from over-allocating to assets with large recent momentum.
 
-The core challenge in multi-asset portfolio optimisation is estimating a reliable covariance matrix from finite historical data. The sample covariance matrix has estimation error that grows with N (number of assets) relative to T (number of observations), producing extreme, unstable portfolio weights. The Ledoit-Wolf (2004) estimator addresses this by shrinking the sample covariance **S** toward a structured target **μI** (scaled identity):
+### Walk-Forward Out-of-Sample Validation (`src/validation/walk_forward.py`)
 
-**Σ̂ = (1 − α) S + α μI**
+The walk-forward engine re-estimates Kelly weights monthly using an expanding window anchored at the first price date — the training slice for any rebalance date is strictly `log_returns.loc[:date]`, so future data is structurally impossible to observe. The `_walk_forward_signal` ignores the `prices` argument entirely; weights are pre-computed and only looked up at runtime, making lookahead impossible by construction (verified by a unit test that appends 200%/day synthetic returns after a split date and confirms identical weights at all common dates). The minimum training window is 756 days (~3 years), so the first valid OOS rebalance is 2016-11. The OOS Sharpe (0.800) is 92% of the IS Sharpe (0.865), well above the 50% overfitting threshold, confirming the strategy generalises beyond the in-sample period.
 
-where the optimal shrinkage intensity **α** is derived analytically, requiring no cross-validation. I expose three swappable estimators — `SampleCovariance`, `LedoitWolfCovariance`, and `EWMACovariance` — all behind a common `estimate(returns) → pd.DataFrame` protocol, making them drop-in replaceable via the `COV_METHOD` config key. Ledoit-Wolf is the default because it consistently produces better-conditioned matrices (lower condition number) even when the number of observations is only a few multiples of the number of assets, which is the typical regime for monthly-rebalanced strategies with a lookback of 252 days and 12 assets.
+### Monte Carlo Simulation (`src/monte_carlo/simulation.py`)
 
-### Monte Carlo Simulation
-
-The Monte Carlo engine generates 50,000 forward paths of 252 trading days each. It operates in two modes: (1) univariate, fitting a normal distribution to historical portfolio returns and drawing i.i.d. daily returns; and (2) multi-asset correlated, drawing from a multivariate normal distribution parameterised by the per-asset historical means and the Ledoit-Wolf covariance matrix, then projecting through the fixed weight vector. The simulation is fully vectorised using NumPy — all 50,000 × 252 draws happen in a single `numpy.random.default_rng.multivariate_normal` call, making it fast enough for interactive use. Results include the terminal wealth distribution, per-path maximum drawdown (computed via vectorised cumulative-maximum), and underwater period lengths. The random seed is fixed via `config.MC_SEED` ensuring full reproducibility.
+The Monte Carlo engine generates 50,000 forward paths of 252 trading days using a fully vectorised NumPy implementation — all 50,000 × 252 draws happen in a single `numpy.random.Generator.multivariate_normal` call. It operates on the historical portfolio return distribution (fitted mean and Ledoit-Wolf covariance), producing terminal wealth distributions, per-path maximum drawdown computed via vectorised cumulative-maximum, and underwater period statistics. The random seed is fixed via `config.MC_SEED` for full reproducibility. The 5th–95th percentile band and median path are rendered in `plot_monte_carlo_fan`.
 
 ---
 

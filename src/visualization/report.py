@@ -22,9 +22,7 @@ SEP = "=" * 66
 SEP2 = "-" * 66
 
 
-def _top_drawdown_periods(
-    equity: pd.Series, n: int = 3
-) -> list[dict]:
+def _top_drawdown_periods(equity: pd.Series, n: int = 3) -> list[dict]:
     """
     Find the top-N distinct drawdown periods by peak-to-trough depth.
 
@@ -49,13 +47,15 @@ def _top_drawdown_periods(
             trough_date = segment.idxmin()
             depth = float(segment.min())
             duration = (date - dd_start).days
-            results.append({
-                "start": dd_start,
-                "trough": trough_date,
-                "end": date,
-                "depth": depth,
-                "duration_days": duration,
-            })
+            results.append(
+                {
+                    "start": dd_start,
+                    "trough": trough_date,
+                    "end": date,
+                    "depth": depth,
+                    "duration_days": duration,
+                }
+            )
             in_dd = False
 
     # Handle still-in-drawdown at end
@@ -63,13 +63,15 @@ def _top_drawdown_periods(
         segment = dd[dd_start:]
         trough_date = segment.idxmin()
         depth = float(segment.min())
-        results.append({
-            "start": dd_start,
-            "trough": trough_date,
-            "end": equity.index[-1],
-            "depth": depth,
-            "duration_days": (equity.index[-1] - dd_start).days,
-        })
+        results.append(
+            {
+                "start": dd_start,
+                "trough": trough_date,
+                "end": equity.index[-1],
+                "depth": depth,
+                "duration_days": (equity.index[-1] - dd_start).days,
+            }
+        )
 
     results.sort(key=lambda x: x["depth"])
     return results[:n]
@@ -105,8 +107,10 @@ def generate_report(
     add(SEP)
     add("  QUANTITATIVE BACKTESTING ENGINE — FULL REPORT")
     add(SEP)
-    add(f"  Date range: {kelly_result.equity_curve.index[0].date()} → "
-        f"{kelly_result.equity_curve.index[-1].date()}")
+    add(
+        f"  Date range: {kelly_result.equity_curve.index[0].date()} → "
+        f"{kelly_result.equity_curve.index[-1].date()}"
+    )
     add(f"  Initial capital: ${config.INITIAL_CAPITAL:,.0f}")
     add()
 
@@ -147,10 +151,18 @@ def generate_report(
         s = stats[regime_name]
         r = s.report
         add()
-        add(f"  {regime_name.upper()} ({s.n_days} days, {s.fraction * 100:.1f}% of period)")
-        add(f"    Sharpe:  {r.sharpe_ratio:>6.3f}  |  CAGR:    {r.annualized_return * 100:>6.2f}%")
-        add(f"    MaxDD:   {r.max_drawdown * 100:>6.2f}%  |  Sortino: {r.sortino_ratio:>6.3f}")
-        add(f"    VaR 95%: {r.var_95 * 100:>6.2f}%  |  CVaR:    {r.cvar_95 * 100:>6.2f}%")
+        add(
+            f"  {regime_name.upper()} ({s.n_days} days, {s.fraction * 100:.1f}% of period)"
+        )
+        add(
+            f"    Sharpe:  {r.sharpe_ratio:>6.3f}  |  CAGR:    {r.annualized_return * 100:>6.2f}%"
+        )
+        add(
+            f"    MaxDD:   {r.max_drawdown * 100:>6.2f}%  |  Sortino: {r.sortino_ratio:>6.3f}"
+        )
+        add(
+            f"    VaR 95%: {r.var_95 * 100:>6.2f}%  |  CVaR:    {r.cvar_95 * 100:>6.2f}%"
+        )
 
     # ── Kelly weight table ──
     add()
@@ -161,8 +173,7 @@ def generate_report(
 
     if not kelly_result.positions.empty:
         mean_w = (
-            kelly_result.positions
-            .replace(0, np.nan)
+            kelly_result.positions.replace(0, np.nan)
             .mean()
             .sort_values(ascending=False)
             .dropna()
@@ -182,9 +193,13 @@ def generate_report(
 
     periods = _top_drawdown_periods(kelly_result.equity_curve, n=3)
     for i, p in enumerate(periods, 1):
-        add(f"  #{i}  Peak→Trough: {p['start'].date()} → {p['trough'].date()}"
-            f"  (Recovery: {p['end'].date()})")
-        add(f"       Depth: {p['depth'] * 100:.2f}%   Duration: {p['duration_days']} days")
+        add(
+            f"  #{i}  Peak→Trough: {p['start'].date()} → {p['trough'].date()}"
+            f"  (Recovery: {p['end'].date()})"
+        )
+        add(
+            f"       Depth: {p['depth'] * 100:.2f}%   Duration: {p['duration_days']} days"
+        )
         add()
 
     add(SEP)

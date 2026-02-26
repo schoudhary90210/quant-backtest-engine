@@ -27,7 +27,6 @@ from src.validation.walk_forward import (
 )
 from src.validation.oos_metrics import compare_is_oos, OVERFITTING_THRESHOLD
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -115,7 +114,7 @@ def test_no_lookahead() -> None:
     """
     all_dates = pd.bdate_range("2019-01-01", periods=1000)
     dates_short = all_dates[:800]
-    dates_ext   = all_dates[800:]
+    dates_ext = all_dates[800:]
 
     np.random.seed(42)
     tickers = ["AAA", "BBB", "CCC"]
@@ -142,7 +141,7 @@ def test_no_lookahead() -> None:
     cfg = WalkForwardConfig(min_train_days=200)
 
     result_short = run_walk_forward(prices_short, cfg)
-    result_full  = run_walk_forward(prices_full, cfg)
+    result_full = run_walk_forward(prices_full, cfg)
 
     # Find dates present in both weight histories
     common_dates = result_short.weight_history.index.intersection(
@@ -152,9 +151,11 @@ def test_no_lookahead() -> None:
 
     for date in common_dates:
         w_short = result_short.weight_history.loc[date]
-        w_full  = result_full.weight_history.loc[date]
+        w_full = result_full.weight_history.loc[date]
         try:
-            pd.testing.assert_series_equal(w_short, w_full, check_names=False, rtol=1e-12)
+            pd.testing.assert_series_equal(
+                w_short, w_full, check_names=False, rtol=1e-12
+            )
         except AssertionError as exc:
             raise AssertionError(f"Lookahead detected at {date.date()}") from exc
 
@@ -203,9 +204,9 @@ def test_weight_history_dates_in_price_index(
     """All weight history dates must exist in the price DataFrame index."""
     result = run_walk_forward(wf_prices, short_wf_config)
     for date in result.weight_history.index:
-        assert date in wf_prices.index, (
-            f"Rebalance date {date.date()} not in price index"
-        )
+        assert (
+            date in wf_prices.index
+        ), f"Rebalance date {date.date()} not in price index"
 
 
 def test_weight_history_columns_match_tickers(
@@ -312,7 +313,7 @@ def _make_risk_report(sharpe: float) -> RiskReport:
 
 
 def test_compare_is_oos_returns_string() -> None:
-    is_m  = _make_risk_report(sharpe=1.0)
+    is_m = _make_risk_report(sharpe=1.0)
     oos_m = _make_risk_report(sharpe=0.8)
     result = compare_is_oos(is_m, oos_m)
     assert isinstance(result, str)
@@ -321,7 +322,7 @@ def test_compare_is_oos_returns_string() -> None:
 
 def test_compare_is_oos_no_overfitting_flag() -> None:
     """OOS Sharpe >= threshold → '[OK]' in output."""
-    is_m  = _make_risk_report(sharpe=1.0)
+    is_m = _make_risk_report(sharpe=1.0)
     oos_m = _make_risk_report(sharpe=0.6)  # 60% of IS — above 50% threshold
     table = compare_is_oos(is_m, oos_m)
     assert "[OK]" in table
@@ -330,7 +331,7 @@ def test_compare_is_oos_no_overfitting_flag() -> None:
 
 def test_compare_is_oos_overfitting_warning() -> None:
     """OOS Sharpe < threshold → '[WARN]' in output."""
-    is_m  = _make_risk_report(sharpe=1.0)
+    is_m = _make_risk_report(sharpe=1.0)
     oos_m = _make_risk_report(sharpe=0.3)  # 30% of IS — below 50% threshold
     table = compare_is_oos(is_m, oos_m)
     assert "[WARN]" in table
@@ -339,7 +340,7 @@ def test_compare_is_oos_overfitting_warning() -> None:
 
 def test_overfitting_threshold_boundary() -> None:
     """Exactly at the threshold (50%) should NOT trigger the warning."""
-    is_m  = _make_risk_report(sharpe=1.0)
+    is_m = _make_risk_report(sharpe=1.0)
     oos_m = _make_risk_report(sharpe=OVERFITTING_THRESHOLD)
     table = compare_is_oos(is_m, oos_m)
     # At exactly 50%, ratio < threshold is False → no warning

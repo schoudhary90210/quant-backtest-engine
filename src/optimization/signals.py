@@ -15,7 +15,10 @@ import pandas as pd
 
 import config
 from src.data.returns import compute_log_returns
-from src.optimization.black_litterman import BlackLittermanConfig, BlackLittermanEstimator
+from src.optimization.black_litterman import (
+    BlackLittermanConfig,
+    BlackLittermanEstimator,
+)
 from src.optimization.covariance import CovarianceEstimator, get_covariance_estimator
 from src.optimization.kelly import kelly_weights
 
@@ -74,7 +77,7 @@ def make_kelly_signal(
             return pd.Series(1.0 / n_assets, index=current_weights.index)
 
         # Use the last `lookback` days of prices
-        window_prices = prices.iloc[-(lookback + 1):]
+        window_prices = prices.iloc[-(lookback + 1) :]
         log_returns = compute_log_returns(window_prices)
 
         # Annualized expected returns (mean daily log return × 252)
@@ -149,7 +152,7 @@ def make_bl_kelly_signal(
         if len(prices) < lookback + 1:
             return pd.Series(1.0 / n_assets, index=current_weights.index)
 
-        window_prices = prices.iloc[-(lookback + 1):]
+        window_prices = prices.iloc[-(lookback + 1) :]
         log_returns = compute_log_returns(window_prices)
 
         # Annualised Ledoit-Wolf covariance

@@ -27,7 +27,6 @@ from src.optimization.black_litterman import (
 from src.optimization.views import generate_momentum_views
 from src.optimization.kelly import kelly_weights
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -36,7 +35,7 @@ from src.optimization.kelly import kelly_weights
 @pytest.fixture
 def simple_cov() -> np.ndarray:
     """Simple 3×3 diagonal covariance (annualised)."""
-    return np.diag([0.04, 0.09, 0.16])          # σ² = 20%, 30%, 40% annual
+    return np.diag([0.04, 0.09, 0.16])  # σ² = 20%, 30%, 40% annual
 
 
 @pytest.fixture
@@ -88,7 +87,7 @@ def test_equilibrium_returns_normalises_weights(simple_cov: np.ndarray) -> None:
     """Market weights are normalised internally — raw and scaled give same pi."""
     w = np.array([1.0, 1.0, 1.0])
     w_norm = w / w.sum()
-    pi_raw  = compute_equilibrium_returns(simple_cov, w)
+    pi_raw = compute_equilibrium_returns(simple_cov, w)
     pi_norm = compute_equilibrium_returns(simple_cov, w_norm)
     np.testing.assert_allclose(pi_raw, pi_norm)
 
@@ -111,8 +110,8 @@ def test_no_views_returns_prior(
     N = 3
     pi = compute_equilibrium_returns(simple_cov, uniform_weights)
     P = np.eye(N)
-    Q = pi.copy()                              # views exactly match prior
-    omega = np.diag(np.ones(N) * 1e12)        # infinite uncertainty → no views
+    Q = pi.copy()  # views exactly match prior
+    omega = np.diag(np.ones(N) * 1e12)  # infinite uncertainty → no views
 
     mu_bl, _ = compute_bl_posterior(pi, simple_cov, P, Q, omega, tau=0.05)
     np.testing.assert_allclose(mu_bl, pi, rtol=1e-4)
@@ -125,12 +124,13 @@ def test_confident_views_converge_to_Q(
     N = 3
     pi = compute_equilibrium_returns(simple_cov, uniform_weights)
     P = np.eye(N)
-    Q = np.array([0.30, 0.20, 0.10])          # views differ from prior
-    omega = np.diag(np.ones(N) * 1e-10)       # near-zero uncertainty → pure view
+    Q = np.array([0.30, 0.20, 0.10])  # views differ from prior
+    omega = np.diag(np.ones(N) * 1e-10)  # near-zero uncertainty → pure view
 
     mu_bl, _ = compute_bl_posterior(pi, simple_cov, P, Q, omega, tau=0.05)
-    np.testing.assert_allclose(mu_bl, Q, rtol=1e-3,
-                                err_msg="mu_BL should converge to Q when Omega→0")
+    np.testing.assert_allclose(
+        mu_bl, Q, rtol=1e-3, err_msg="mu_BL should converge to Q when Omega→0"
+    )
 
 
 def test_posterior_between_prior_and_views(
@@ -140,16 +140,16 @@ def test_posterior_between_prior_and_views(
     N = 3
     pi = compute_equilibrium_returns(simple_cov, uniform_weights)
     P = np.eye(N)
-    Q = pi * 2.0                              # views are 2× prior
+    Q = pi * 2.0  # views are 2× prior
     omega = np.diag(np.diag(simple_cov) * 0.05)
 
     mu_bl, _ = compute_bl_posterior(pi, simple_cov, P, Q, omega, tau=0.05)
 
     # Each mu_bl element should be strictly between pi and Q
     for i in range(N):
-        assert pi[i] < mu_bl[i] < Q[i], (
-            f"Asset {i}: pi={pi[i]:.4f}, mu_bl={mu_bl[i]:.4f}, Q={Q[i]:.4f}"
-        )
+        assert (
+            pi[i] < mu_bl[i] < Q[i]
+        ), f"Asset {i}: pi={pi[i]:.4f}, mu_bl={mu_bl[i]:.4f}, Q={Q[i]:.4f}"
 
 
 # ---------------------------------------------------------------------------
@@ -170,11 +170,11 @@ def test_larger_tau_gives_more_weight_to_views(
     Q = pi * 3.0
     omega = np.diag(np.diag(simple_cov) * 0.05)
 
-    mu_low_tau,  _ = compute_bl_posterior(pi, simple_cov, P, Q, omega, tau=0.01)
+    mu_low_tau, _ = compute_bl_posterior(pi, simple_cov, P, Q, omega, tau=0.01)
     mu_high_tau, _ = compute_bl_posterior(pi, simple_cov, P, Q, omega, tau=0.20)
 
     # High tau → posterior closer to Q (larger deviation from pi)
-    dist_low  = np.linalg.norm(mu_low_tau  - pi)
+    dist_low = np.linalg.norm(mu_low_tau - pi)
     dist_high = np.linalg.norm(mu_high_tau - pi)
     assert dist_high > dist_low, (
         f"Higher tau should move posterior toward views: "
@@ -213,14 +213,12 @@ def test_larger_omega_gives_more_weight_to_prior(
 # ---------------------------------------------------------------------------
 
 
-def test_view_dimensions(
-    sample_returns: pd.DataFrame, simple_cov: np.ndarray
-) -> None:
+def test_view_dimensions(sample_returns: pd.DataFrame, simple_cov: np.ndarray) -> None:
     """P is (N×N), Q is (N,), Omega is (N×N) diagonal."""
     N = sample_returns.shape[1]
     P, Q, omega = generate_momentum_views(sample_returns, simple_cov)
     assert P.shape == (N, N), f"P shape: {P.shape}"
-    assert Q.shape == (N,),   f"Q shape: {Q.shape}"
+    assert Q.shape == (N,), f"Q shape: {Q.shape}"
     assert omega.shape == (N, N), f"omega shape: {omega.shape}"
 
 
@@ -262,9 +260,7 @@ def test_use_views_false_returns_equilibrium(
     cov = sample_cov_df.values
 
     mkt_w = np.array([1 / 3, 1 / 3, 1 / 3])
-    pi_expected = compute_equilibrium_returns(
-        cov, mkt_w, risk_aversion=2.5
-    )
+    pi_expected = compute_equilibrium_returns(cov, mkt_w, risk_aversion=2.5)
     pi_series = pd.Series(pi_expected, index=tickers)
 
     cfg = BlackLittermanConfig(use_views=False, risk_aversion=2.5)

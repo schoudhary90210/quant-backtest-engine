@@ -158,34 +158,34 @@ def compute_bl_posterior(
     """
     N = len(pi)
     K = len(Q)
-    tau_cov = tau * cov_matrix                          # (N, N)
+    tau_cov = tau * cov_matrix  # (N, N)
 
     # (tau * Sigma)^{-1} — solve tau_cov @ X = I for X
     # Using solve instead of inv: solve the N systems tau_cov @ x_i = e_i
     tau_cov_inv = np.linalg.solve(tau_cov, np.eye(N))  # (N, N)
 
     # Omega is diagonal; use element-wise operations to avoid full K×K inversion
-    omega_diag = np.diag(omega)                         # (K,)
+    omega_diag = np.diag(omega)  # (K,)
     if np.any(omega_diag <= 0):
         raise ValueError("omega diagonal must be strictly positive")
 
     # P' Omega^{-1} P  — shape (N, N)
     # Row k of P scaled by 1/omega_k, then P.T @ result
-    P_scaled = P / omega_diag[:, np.newaxis]            # (K, N)
-    PtOP = P.T @ P_scaled                               # (N, N)
+    P_scaled = P / omega_diag[:, np.newaxis]  # (K, N)
+    PtOP = P.T @ P_scaled  # (N, N)
 
     # P' Omega^{-1} Q  — shape (N,)
-    PtOQ = P.T @ (Q / omega_diag)                       # (N,)
+    PtOQ = P.T @ (Q / omega_diag)  # (N,)
 
     # Precision matrix A and right-hand side b
-    A = tau_cov_inv + PtOP                              # (N, N)
-    b = tau_cov_inv @ pi + PtOQ                         # (N,)
+    A = tau_cov_inv + PtOP  # (N, N)
+    b = tau_cov_inv @ pi + PtOQ  # (N,)
 
     # mu_BL = A^{-1} b  (solve, not inv)
-    mu_bl = np.linalg.solve(A, b)                       # (N,)
+    mu_bl = np.linalg.solve(A, b)  # (N,)
 
     # Cov_BL = A^{-1}  (solve against identity)
-    cov_bl = np.linalg.solve(A, np.eye(N))              # (N, N)
+    cov_bl = np.linalg.solve(A, np.eye(N))  # (N, N)
 
     return mu_bl, cov_bl
 
@@ -239,7 +239,7 @@ class BlackLittermanEstimator:
         """
         tickers = returns.columns.tolist()
         N = len(tickers)
-        cov = cov_matrix.values                         # (N, N)
+        cov = cov_matrix.values  # (N, N)
 
         # ── Market weights ────────────────────────────────────────────────
         if market_weights is not None:

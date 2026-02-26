@@ -41,8 +41,12 @@ class TestTransactionCostModel:
         model = TransactionCostModel(cost_bps=10, slippage_bps=5)
         buy = pd.Series({"A": 0.20})
         sell = pd.Series({"A": -0.20})
-        assert abs(model.trading_cost(buy, 1_000_000) -
-                    model.trading_cost(sell, 1_000_000)) < 1e-10
+        assert (
+            abs(
+                model.trading_cost(buy, 1_000_000) - model.trading_cost(sell, 1_000_000)
+            )
+            < 1e-10
+        )
 
     def test_numpy_array_input(self):
         model = TransactionCostModel(cost_bps=10, slippage_bps=5)

@@ -20,10 +20,10 @@ from sklearn.covariance import LedoitWolf
 
 import config
 
-
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
+
 
 class CovarianceEstimator(Protocol):
     """Common interface for covariance estimators."""
@@ -48,6 +48,7 @@ class CovarianceEstimator(Protocol):
 # ---------------------------------------------------------------------------
 # Implementations
 # ---------------------------------------------------------------------------
+
 
 class SampleCovariance:
     """Unbiased sample covariance matrix (ddof=1)."""
@@ -90,7 +91,7 @@ class EWMACovariance:
         Decay factor (lambda), typically 0.94 for daily data (RiskMetrics).
     """
 
-    def __init__(self, decay: float = config.EWMA_LAMBDA):
+    def __init__(self, decay: float = config.EWMA_LAMBDA) -> None:
         if not 0 < decay < 1:
             raise ValueError(f"Decay must be in (0, 1), got {decay}")
         self.decay = decay
@@ -104,7 +105,7 @@ class EWMACovariance:
         # span = 2/(1-lambda) - 1 converts decay to span for ewm
         # But more directly: use com = decay / (1 - decay)
         com = self.decay / (1.0 - self.decay)
-        cov_matrix = returns.ewm(com=com).cov().iloc[-len(tickers):]
+        cov_matrix = returns.ewm(com=com).cov().iloc[-len(tickers) :]
         # The last N rows of the multi-indexed result are the final estimate
         cov_matrix = cov_matrix.droplevel(0)
         cov_matrix.index = tickers
@@ -116,6 +117,7 @@ class EWMACovariance:
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
+
 
 def get_covariance_estimator(method: str = config.COV_METHOD) -> CovarianceEstimator:
     """

@@ -82,28 +82,37 @@ def main() -> None:
     bl_signal = make_bl_kelly_signal(fraction=0.5)
 
     ew_result = run_backtest(prices, equal_weight_signal, rebalance_freq="monthly")
-    hk_result = run_backtest(prices, hk_signal,          rebalance_freq="monthly")
-    fk_result = run_backtest(prices, fk_signal,          rebalance_freq="monthly")
-    bl_result = run_backtest(prices, bl_signal,          rebalance_freq="monthly")
+    hk_result = run_backtest(prices, hk_signal, rebalance_freq="monthly")
+    fk_result = run_backtest(prices, fk_signal, rebalance_freq="monthly")
+    bl_result = run_backtest(prices, bl_signal, rebalance_freq="monthly")
 
     backtest_results = {
         "Equal Weight": ew_result,
-        "Half-Kelly":   hk_result,
-        "Full Kelly":   fk_result,
-        "BL + Kelly":   bl_result,
+        "Half-Kelly": hk_result,
+        "Full Kelly": fk_result,
+        "BL + Kelly": bl_result,
     }
 
     hk_metrics = compute_risk_report(hk_result.daily_returns)
     bl_metrics = compute_risk_report(bl_result.daily_returns)
     ew_metrics = compute_risk_report(ew_result.daily_returns)
 
-    logger.info("      Equal Weight  — CAGR %.1f%%  Sharpe %.3f",
-                ew_result.cagr * 100, ew_metrics.sharpe_ratio)
-    logger.info("      Half-Kelly    — CAGR %.1f%%  Sharpe %.3f",
-                hk_result.cagr * 100, hk_metrics.sharpe_ratio)
+    logger.info(
+        "      Equal Weight  — CAGR %.1f%%  Sharpe %.3f",
+        ew_result.cagr * 100,
+        ew_metrics.sharpe_ratio,
+    )
+    logger.info(
+        "      Half-Kelly    — CAGR %.1f%%  Sharpe %.3f",
+        hk_result.cagr * 100,
+        hk_metrics.sharpe_ratio,
+    )
     logger.info("      Full Kelly    — CAGR %.1f%%", fk_result.cagr * 100)
-    logger.info("      BL + Kelly    — CAGR %.1f%%  Sharpe %.3f",
-                bl_result.cagr * 100, bl_metrics.sharpe_ratio)
+    logger.info(
+        "      BL + Kelly    — CAGR %.1f%%  Sharpe %.3f",
+        bl_result.cagr * 100,
+        bl_metrics.sharpe_ratio,
+    )
 
     # Choose which IS result drives the walk-forward comparison
     primary_result = bl_result if RETURN_ESTIMATOR == "black_litterman" else hk_result
@@ -111,8 +120,9 @@ def main() -> None:
     # ── 3. Walk-Forward Validation ───────────────────────────────
     wf_result = None
     if WALK_FORWARD:
-        logger.info("[3/6] Walk-forward OOS validation (estimator=%s)...",
-                    RETURN_ESTIMATOR)
+        logger.info(
+            "[3/6] Walk-forward OOS validation (estimator=%s)...", RETURN_ESTIMATOR
+        )
         wf_result = run_walk_forward(
             prices,
             wf_config=WalkForwardConfig(),
@@ -128,8 +138,11 @@ def main() -> None:
         compare_is_oos(wf_result.in_sample_metrics, wf_result.oos_metrics)
 
     # ── 4. Monte Carlo ───────────────────────────────────────────
-    logger.info("[4/6] Running Monte Carlo (%d paths × %d days)...",
-                config.MC_NUM_PATHS, config.MC_HORIZON_DAYS)
+    logger.info(
+        "[4/6] Running Monte Carlo (%d paths × %d days)...",
+        config.MC_NUM_PATHS,
+        config.MC_HORIZON_DAYS,
+    )
     mc_result = run_monte_carlo(
         daily_returns=primary_result.daily_returns,
         n_paths=config.MC_NUM_PATHS,
@@ -138,9 +151,11 @@ def main() -> None:
         seed=config.MC_SEED,
         store_paths=True,
     )
-    logger.info("      P(profit)=%.1f%%  Median terminal $%s",
-                mc_result.prob_profit * 100,
-                f"{mc_result.median_terminal_wealth:,.0f}")
+    logger.info(
+        "      P(profit)=%.1f%%  Median terminal $%s",
+        mc_result.prob_profit * 100,
+        f"{mc_result.median_terminal_wealth:,.0f}",
+    )
 
     # ── 5. Charts ────────────────────────────────────────────────
     logger.info("[5/6] Generating charts → %s", config.CHART_DIR)
@@ -149,13 +164,13 @@ def main() -> None:
     # Core strategy equity curves (EW / HK / FK for the main comparison)
     core_equity_map = {
         "Equal Weight": ew_result.equity_curve,
-        "Half-Kelly":   hk_result.equity_curve,
-        "Full Kelly":   fk_result.equity_curve,
+        "Half-Kelly": hk_result.equity_curve,
+        "Full Kelly": fk_result.equity_curve,
     }
     returns_map = {
         "Equal Weight": ew_result.daily_returns,
-        "Half-Kelly":   hk_result.daily_returns,
-        "Full Kelly":   fk_result.daily_returns,
+        "Half-Kelly": hk_result.daily_returns,
+        "Full Kelly": fk_result.daily_returns,
     }
 
     saved = []
@@ -195,14 +210,14 @@ def main() -> None:
 
     # Return estimator comparison: EW vs Historical Mean + Kelly vs BL + Kelly
     estimator_equity = {
-        "Equal Weight":            ew_result.equity_curve,
+        "Equal Weight": ew_result.equity_curve,
         "Historical Mean + Kelly": hk_result.equity_curve,
-        "BL + Kelly":              bl_result.equity_curve,
+        "BL + Kelly": bl_result.equity_curve,
     }
     estimator_metrics = {
-        "Equal Weight":            (ew_result.cagr, ew_metrics.sharpe_ratio),
+        "Equal Weight": (ew_result.cagr, ew_metrics.sharpe_ratio),
         "Historical Mean + Kelly": (hk_result.cagr, hk_metrics.sharpe_ratio),
-        "BL + Kelly":              (bl_result.cagr, bl_metrics.sharpe_ratio),
+        "BL + Kelly": (bl_result.cagr, bl_metrics.sharpe_ratio),
     }
     p = plot_return_estimator_comparison(estimator_equity, estimator_metrics)
     saved.append(p)

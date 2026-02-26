@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Signal protocol — any callable or object providing target weights
 # ---------------------------------------------------------------------------
 
+
 class SignalProvider(Protocol):
     """Protocol for strategy signal generators."""
 
@@ -41,6 +42,7 @@ class SignalProvider(Protocol):
 # ---------------------------------------------------------------------------
 # Portfolio state snapshot
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PortfolioState:
@@ -65,6 +67,7 @@ class PortfolioState:
 # Backtest result container
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BacktestResult:
     """Container for all backtest outputs."""
@@ -88,7 +91,9 @@ class BacktestResult:
         years = (self.equity_curve.index[-1] - self.equity_curve.index[0]).days / 365.25
         if years <= 0:
             return 0.0
-        return (self.equity_curve.iloc[-1] / self.equity_curve.iloc[0]) ** (1 / years) - 1
+        return (self.equity_curve.iloc[-1] / self.equity_curve.iloc[0]) ** (
+            1 / years
+        ) - 1
 
     @property
     def max_drawdown(self) -> float:
@@ -100,6 +105,7 @@ class BacktestResult:
 # ---------------------------------------------------------------------------
 # Rebalance schedule helpers
 # ---------------------------------------------------------------------------
+
 
 def _should_rebalance(
     date: pd.Timestamp,
@@ -119,6 +125,7 @@ def _should_rebalance(
 # ---------------------------------------------------------------------------
 # Core backtester
 # ---------------------------------------------------------------------------
+
 
 def run_backtest(
     prices: pd.DataFrame,

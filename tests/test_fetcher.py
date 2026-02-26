@@ -13,23 +13,26 @@ import pytest
 import config
 from src.data import fetcher
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_download(prices: pd.Series):
     """Return a function that mimics yf.download for a single ticker."""
+
     def mock_download(ticker, start=None, end=None, auto_adjust=True, progress=False):
         df = pd.DataFrame({"Close": prices})
         df.index.name = "Date"
         return df
+
     return mock_download
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestFetchSingle:
     """Tests for fetch_single()."""
@@ -96,9 +99,7 @@ class TestFetchPrices:
             patch.object(config, "CACHE_DIR", str(tmp_path)),
             patch("src.data.fetcher.yf.download", mock_download),
         ):
-            result = fetcher.fetch_prices(
-                tickers=["A", "B", "C"], use_cache=False
-            )
+            result = fetcher.fetch_prices(tickers=["A", "B", "C"], use_cache=False)
 
         assert isinstance(result, pd.DataFrame)
         assert list(result.columns) == ["A", "B", "C"]
@@ -147,9 +148,7 @@ class TestFetchPrices:
         dates = pd.bdate_range("2020-01-01", periods=50)
 
         def mock_download(ticker, **kwargs):
-            prices = pd.Series(
-                np.linspace(100, 150, 50), index=dates, name="Close"
-            )
+            prices = pd.Series(np.linspace(100, 150, 50), index=dates, name="Close")
             if ticker == "GAPPY":
                 # Introduce NaN gaps of 2 days
                 prices.iloc[10] = np.nan
@@ -160,9 +159,7 @@ class TestFetchPrices:
             patch.object(config, "CACHE_DIR", str(tmp_path)),
             patch("src.data.fetcher.yf.download", mock_download),
         ):
-            result = fetcher.fetch_prices(
-                tickers=["SOLID", "GAPPY"], use_cache=False
-            )
+            result = fetcher.fetch_prices(tickers=["SOLID", "GAPPY"], use_cache=False)
 
         # After ffill(limit=5), no NaNs should remain
         assert not result.isna().any().any()

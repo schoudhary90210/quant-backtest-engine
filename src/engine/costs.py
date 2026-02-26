@@ -29,7 +29,7 @@ class TransactionCostModel:
         self,
         cost_bps: float = config.TRANSACTION_COST_BPS,
         slippage_bps: float = config.SLIPPAGE_BPS,
-    ):
+    ) -> None:
         self.cost_rate = cost_bps / 10_000  # bps → decimal
         self.slippage_rate = slippage_bps / 10_000
 

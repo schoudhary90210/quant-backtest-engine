@@ -56,9 +56,7 @@ def align_to_common_dates(prices: pd.DataFrame) -> pd.DataFrame:
     return aligned
 
 
-def handle_missing(
-    returns: pd.DataFrame, method: str = "drop"
-) -> pd.DataFrame:
+def handle_missing(returns: pd.DataFrame, method: str = "drop") -> pd.DataFrame:
     """
     Handle missing values in a returns DataFrame.
 
