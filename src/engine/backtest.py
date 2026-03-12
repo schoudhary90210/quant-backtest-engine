@@ -203,7 +203,7 @@ def run_backtest(
             trade_weights = target_weights - current_weights
 
             # ── 5. Apply costs ──
-            cost_dollars = cost_model.trading_cost(trade_weights, state.equity)
+            cost_dollars = cost_model.trading_cost(trade_weights, state.equity, date=date)
             turn = cost_model.turnover(trade_weights)
 
             # ── 6. Execute rebalance ──

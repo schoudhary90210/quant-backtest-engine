@@ -228,3 +228,78 @@ def compute_risk_report(
         win_rate=win_rate(daily_returns),
         profit_factor=profit_factor(daily_returns),
     )
+
+
+# ---------------------------------------------------------------------------
+# Turnover & cost analysis
+# ---------------------------------------------------------------------------
+
+
+def turnover_analysis(
+    backtest_result: object,
+    cost_multipliers: list[float] | None = None,
+    risk_free_rate: float = config.RISK_FREE_RATE,
+) -> dict:
+    """
+    Analyse turnover and cost drag for a backtest result.
+
+    Uses duck typing — accepts any object with `daily_returns`, `turnover`,
+    `total_costs`, and `equity_curve` attributes (avoids circular import).
+
+    Parameters
+    ----------
+    backtest_result : BacktestResult-like
+        Must have .daily_returns, .turnover, .total_costs, .equity_curve.
+    cost_multipliers : list[float] or None
+        Multipliers for cost sensitivity analysis. Defaults to [0, 0.5, 1, 2, 3, 5].
+    risk_free_rate : float
+        Annualized risk-free rate for Sharpe computation.
+
+    Returns
+    -------
+    dict
+        Keys: annualized_turnover, avg_holding_period_days, total_cost_drag_bps,
+              cost_sensitivity (list of {multiplier, sharpe} dicts).
+    """
+    if cost_multipliers is None:
+        cost_multipliers = [0.0, 0.5, 1.0, 2.0, 3.0, 5.0]
+
+    daily_returns = backtest_result.daily_returns
+    turnover_series = backtest_result.turnover
+    cost_series = backtest_result.total_costs
+    equity_curve = backtest_result.equity_curve
+
+    n_days = len(daily_returns)
+    years = n_days / TRADING_DAYS if n_days > 0 else 1.0
+
+    # Total one-way turnover over the backtest
+    total_turnover = float(turnover_series.sum())
+    ann_turnover = total_turnover / years if years > 0 else 0.0
+
+    # Average holding period
+    avg_holding = TRADING_DAYS / ann_turnover if ann_turnover > 0 else float("inf")
+
+    # Cost drag in bps/year
+    avg_equity = float(equity_curve.mean()) if len(equity_curve) > 0 else 1.0
+    total_costs = float(cost_series.sum())
+    cost_drag_bps = (total_costs / avg_equity / years * 10_000) if years > 0 else 0.0
+
+    # Cost sensitivity: adjust returns by varying cost multiplier
+    cost_sensitivity: list[dict[str, float]] = []
+
+    # Daily cost drag ratio
+    cost_drag_daily = cost_series / equity_curve
+    cost_drag_daily = cost_drag_daily.reindex(daily_returns.index, fill_value=0.0)
+
+    for mult in cost_multipliers:
+        # At mult=1 we get original returns; at mult=0 we add back all costs
+        adjusted = daily_returns + cost_drag_daily * (1.0 - mult)
+        sr = sharpe_ratio(adjusted, risk_free_rate)
+        cost_sensitivity.append({"multiplier": mult, "sharpe": sr})
+
+    return {
+        "annualized_turnover": ann_turnover,
+        "avg_holding_period_days": avg_holding,
+        "total_cost_drag_bps": cost_drag_bps,
+        "cost_sensitivity": cost_sensitivity,
+    }

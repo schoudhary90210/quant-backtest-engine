@@ -175,3 +175,25 @@ class TestKellySingularCovariance:
         w = kelly_weights(mu, cov, risk_free_rate=0.04, fraction=0.5)
         assert np.isfinite(w).all()
         assert (w >= 0).all()
+
+
+class TestFractionalKellyMultiAsset:
+
+    def test_fractional_scales_all_weights(self):
+        """Fractional Kelly should scale all weights by the fraction."""
+        mu = pd.Series({"A": 0.12, "B": 0.08, "C": 0.15})
+        cov = pd.DataFrame(
+            np.diag([0.04, 0.02, 0.06]),
+            index=["A", "B", "C"],
+            columns=["A", "B", "C"],
+        )
+        full = kelly_weights(
+            mu, cov, risk_free_rate=0.04, fraction=1.0,
+            max_weight=10.0, max_leverage=100.0,
+        )
+        third = kelly_weights(
+            mu, cov, risk_free_rate=0.04, fraction=1.0 / 3,
+            max_weight=10.0, max_leverage=100.0,
+        )
+        for t in mu.index:
+            assert abs(third[t] - full[t] / 3.0) < 1e-10

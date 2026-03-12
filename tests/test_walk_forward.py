@@ -23,6 +23,7 @@ from src.validation.walk_forward import (
     WalkForwardConfig,
     WalkForwardResult,
     _monthly_rebalance_dates,
+    _rebalance_dates,
     run_walk_forward,
 )
 from src.validation.oos_metrics import compare_is_oos, OVERFITTING_THRESHOLD
@@ -63,9 +64,10 @@ def short_wf_config() -> WalkForwardConfig:
 
 
 def test_wf_config_defaults() -> None:
+    import config
     cfg = WalkForwardConfig()
     assert cfg.min_train_days == 756
-    assert cfg.rebalance_freq == "M"
+    assert cfg.rebalance_freq == config.REBALANCE_FREQ
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +97,46 @@ def test_monthly_rebalance_dates_count() -> None:
     rebalance = _monthly_rebalance_dates(dates)
     n_months = len({(d.year, d.month) for d in dates})
     assert len(rebalance) == n_months
+
+
+# ---------------------------------------------------------------------------
+# _rebalance_dates dispatcher
+# ---------------------------------------------------------------------------
+
+
+def test_rebalance_dates_monthly():
+    dates = pd.bdate_range("2022-01-01", periods=252)
+    result = _rebalance_dates(dates, "monthly")
+    expected = _monthly_rebalance_dates(dates)
+    pd.testing.assert_index_equal(result, expected)
+
+
+def test_rebalance_dates_legacy_M():
+    """'M' is a legacy alias for 'monthly' — must still work."""
+    dates = pd.bdate_range("2022-01-01", periods=252)
+    result_M = _rebalance_dates(dates, "M")
+    result_monthly = _rebalance_dates(dates, "monthly")
+    pd.testing.assert_index_equal(result_M, result_monthly)
+
+
+def test_rebalance_dates_daily():
+    dates = pd.bdate_range("2022-01-01", periods=252)
+    result = _rebalance_dates(dates, "daily")
+    pd.testing.assert_index_equal(result, dates)
+
+
+def test_rebalance_dates_invalid():
+    dates = pd.bdate_range("2022-01-01", periods=10)
+    with pytest.raises(ValueError, match="Unknown rebalance frequency"):
+        _rebalance_dates(dates, "weekly")
+
+
+def test_daily_rebalance_cadence(wf_prices):
+    cfg = WalkForwardConfig(min_train_days=252, rebalance_freq="daily")
+    result = run_walk_forward(wf_prices, cfg)
+    # Weight history should have many more entries than monthly
+    monthly_result = run_walk_forward(wf_prices, WalkForwardConfig(min_train_days=252))
+    assert len(result.weight_history) > len(monthly_result.weight_history) * 5
 
 
 # ---------------------------------------------------------------------------

@@ -24,9 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def _section(title: str) -> None:
-    print(f"\n{'=' * 62}")
-    print(f"  {title}")
-    print("=" * 62)
+    logger.info("\n%s\n  %s\n%s", "=" * 62, title, "=" * 62)
 
 
 def main() -> None:
@@ -50,17 +48,17 @@ def main() -> None:
 
     for name, result in [("Equal Weight (1/N)", ew_result), ("Half-Kelly (LW)", kelly_result)]:
         report = compute_risk_report(result.daily_returns)
-        print(f"\n  ─── {name} ───")
-        print(report)
-        print(f"  Total Costs:         ${result.total_costs.sum():>10,.0f}")
-        print(f"  Avg Daily Turnover:   {result.turnover.mean() * 100:>7.2f}%")
+        logger.info("\n  ─── %s ───", name)
+        logger.info("\n%s", report)
+        logger.info("  Total Costs:         $%s", f"{result.total_costs.sum():,.0f}")
+        logger.info("  Avg Daily Turnover:   %7.2f%%", result.turnover.mean() * 100)
 
     # ── 5. Regime analysis (Kelly) ──
     _section("REGIME ANALYSIS: Half-Kelly")
     stats = regime_stats(kelly_result.daily_returns)
     for regime_name in ("bull", "sideways", "bear"):
         if regime_name in stats:
-            print(f"\n{stats[regime_name]}")
+            logger.info("\n%s", stats[regime_name])
 
     # ── 6. Monte Carlo (Kelly) ──
     _section("MONTE CARLO SIMULATION: Half-Kelly (50k paths, 1yr)")
@@ -72,7 +70,7 @@ def main() -> None:
         initial_capital=1_000_000,
         seed=42,
     )
-    print(mc)
+    logger.info("\n%s", mc)
 
     _section("DONE")
 

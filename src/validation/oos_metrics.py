@@ -7,7 +7,11 @@ overfitting when the OOS Sharpe ratio falls below 50% of the IS Sharpe ratio.
 
 from __future__ import annotations
 
+import logging
+
 from src.risk.metrics import RiskReport
+
+logger = logging.getLogger(__name__)
 
 OVERFITTING_THRESHOLD = 0.50  # warn if OOS Sharpe < 50% of IS Sharpe
 
@@ -90,5 +94,5 @@ def compare_is_oos(
     lines.append("=" * w)
 
     table = "\n".join(lines)
-    print(table)
+    logger.info("\n%s", table)
     return table

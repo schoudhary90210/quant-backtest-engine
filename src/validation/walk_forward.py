@@ -1,10 +1,10 @@
 """
 Anchored walk-forward out-of-sample validation.
 
-Re-estimates Kelly weights once per calendar month using an expanding training
-window anchored at the first available price date.  No future information is
-ever used when computing weights for any rebalance period — the window only
-ever grows backward.
+Re-estimates Kelly weights at each rebalance date (monthly or daily) using an
+expanding training window anchored at the first available price date.  No future
+information is ever used when computing weights for any rebalance period — the
+window only ever grows backward.
 
 The existing run_backtest() engine is used without modification; the
 walk-forward signal is a thin wrapper that looks up pre-computed weights.
@@ -52,8 +52,9 @@ class WalkForwardConfig:
         date is considered valid for weight estimation.  Defaults to 756
         (approximately 3 calendar years).
     rebalance_freq : str
-        Cadence label for the walk-forward schedule.  ``"M"`` = monthly,
-        matching the standard backtest rebalance frequency.
+        Cadence for the walk-forward schedule.  ``"monthly"`` (preferred) or
+        ``"daily"``.  ``"M"`` is accepted as a legacy alias for ``"monthly"``.
+        Defaults to ``config.REBALANCE_FREQ``.
     start_date : str
         Inclusive start of the full price data window.
     end_date : str
@@ -61,7 +62,7 @@ class WalkForwardConfig:
     """
 
     min_train_days: int = 756
-    rebalance_freq: str = "M"  # "M" = monthly cadence
+    rebalance_freq: str = cfg.REBALANCE_FREQ
     start_date: str = cfg.START_DATE
     end_date: str = cfg.END_DATE
 
@@ -83,7 +84,7 @@ class WalkForwardResult:
         Full-period backtest using pre-computed expanding-window Kelly weights
         (equal-weight warm-up before ``oos_start_date``).
     weight_history : pd.DataFrame
-        Monthly rebalance dates (DatetimeIndex) × tickers — Kelly weights
+        Rebalance dates (DatetimeIndex) × tickers — Kelly weights
         computed with training data ending on each rebalance date.
     oos_start_date : pd.Timestamp
         First rebalance date with enough training data (>= ``min_train_days``).
@@ -118,11 +119,13 @@ def run_walk_forward(
     initial_capital: float = cfg.INITIAL_CAPITAL,
     return_estimator: str = "historical_mean",
     bl_config: BlackLittermanConfig | None = None,
+    cost_model: object | None = None,
 ) -> WalkForwardResult:
     """
     Run anchored walk-forward out-of-sample validation.
 
-    For each calendar month in the price data the function:
+    For each rebalance date (monthly or daily, per ``wf_config.rebalance_freq``)
+    the function:
 
     1. Slices all available log returns from the first price date up to and
        including that rebalance date (expanding window — no lookahead).
@@ -183,11 +186,14 @@ def run_walk_forward(
     # ── 1. Log returns for the full price history ──────────────────────────
     log_returns = compute_log_returns(prices)
 
-    # ── 2. Monthly rebalance dates (first trading day of each calendar month) ─
-    rebalance_dates = _monthly_rebalance_dates(prices.index)
+    # ── 2. Rebalance dates ──────────────────────────────────────────────────
+    rebalance_dates = _rebalance_dates(prices.index, wf_config.rebalance_freq)
 
     # ── 3. Expanding-window weight estimation ──────────────────────────────
+    # Walk-forward uses ledoit_wolf regardless of config.COV_METHOD for
+    # reproducibility — the expanding-window estimator needs a fast, stable method.
     cov_estimator = LedoitWolfCovariance()
+    logger.info("Walk-forward covariance: Ledoit-Wolf (pinned for expanding-window stability)")
     bl_estimator: BlackLittermanEstimator | None = (
         BlackLittermanEstimator(bl_config)
         if return_estimator == "black_litterman"
@@ -247,9 +253,10 @@ def run_walk_forward(
 
     assert oos_start_date is not None  # guaranteed by the check above
     logger.info(
-        "Walk-forward (%s): %d monthly windows | OOS start: %s",
+        "Walk-forward (%s): %d %s windows | OOS start: %s",
         return_estimator,
         len(weight_history),
+        wf_config.rebalance_freq,
         oos_start_date.date(),
     )
 
@@ -269,7 +276,8 @@ def run_walk_forward(
             prices,
             is_signal,
             initial_capital=initial_capital,
-            rebalance_freq="monthly",
+            rebalance_freq=_to_backtest_freq(wf_config.rebalance_freq),
+            cost_model=cost_model,
         )
 
     # ── 6. OOS backtest (walk-forward weights) ─────────────────────────────
@@ -277,7 +285,8 @@ def run_walk_forward(
         prices,
         wf_signal,
         initial_capital=initial_capital,
-        rebalance_freq="monthly",
+        rebalance_freq=_to_backtest_freq(wf_config.rebalance_freq),
+        cost_model=cost_model,
     )
 
     # ── 7. Risk reports ────────────────────────────────────────────────────
@@ -297,6 +306,30 @@ def run_walk_forward(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _rebalance_dates(price_index: pd.DatetimeIndex, freq: str) -> pd.DatetimeIndex:
+    """Return rebalance dates for the given frequency.
+
+    Accepts ``"monthly"`` (preferred), ``"M"`` (legacy alias), or ``"daily"``.
+    """
+    if freq in ("M", "monthly"):
+        return _monthly_rebalance_dates(price_index)
+    if freq == "daily":
+        return price_index
+    raise ValueError(f"Unknown rebalance frequency: '{freq}'")
+
+
+def _to_backtest_freq(freq: str) -> str:
+    """Map WalkForwardConfig freq to run_backtest() freq.
+
+    ``"M"`` is accepted as a legacy alias for ``"monthly"``.
+    """
+    if freq in ("M", "monthly"):
+        return "monthly"
+    if freq == "daily":
+        return "daily"
+    raise ValueError(f"Unknown rebalance frequency: '{freq}'")
 
 
 def _monthly_rebalance_dates(price_index: pd.DatetimeIndex) -> pd.DatetimeIndex:

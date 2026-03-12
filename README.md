@@ -1,208 +1,297 @@
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-175%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-470%20passing-brightgreen?style=flat-square)
 
 # Quantitative Backtesting & Portfolio Optimization Engine
 
-I built this to find out whether Kelly Criterion portfolio optimization actually beats a simple equal-weight strategy on real market data — not in theory, not on toy examples, but on 12 real assets over 11 years with realistic transaction costs. Then I extended it with a Black-Litterman return estimator and anchored walk-forward validation to check whether the results were genuinely out-of-sample robust. The short answer to both questions is yes. The full infrastructure: event-driven backtester, Ledoit-Wolf covariance, BL posterior returns, parquet caching, Monte Carlo forward simulation, and a walk-forward validation loop that is no-lookahead by construction.
+A research-grade backtesting framework that implements seven portfolio construction strategies across a 12-asset multi-asset universe, validated with Almgren-Chriss nonlinear transaction costs, combinatorial purged cross-validation (CPCV), and Fama-French factor attribution. The primary strategy (Black-Litterman + Kelly criterion) achieves a Deflated Sharpe Ratio of 0.999 and a Probability of Backtest Overfitting of 0.311, suggesting the result is not purely noise — though the Probabilistic Sharpe Ratio of 0.822 fails to statistically dominate equal-weight at the 95% confidence level.
 
 ---
 
-## Results
+## Key Results
 
-### In-Sample (2014–2025, full period)
+### Strategy Comparison (2014-09-17 to 2025-12-30)
 
-| Strategy | CAGR | Sharpe | Sortino | Max Drawdown | Calmar |
-|---|---|---|---|---|---|
-| Equal Weight (1/N) | 13.2% | 0.478 | 0.458 | -27.8% | 0.321 |
-| Half-Kelly (Historical Mean) | 33.0% | 0.921 | 0.977 | -29.1% | 0.747 |
-| Full Kelly | 33.1% | 0.916 | 0.970 | -31.9% | 0.683 |
-| **BL + Kelly** | **30.8%** | **0.865** | — | **-32.7%** | — |
+| Strategy | Sharpe | Sortino | CAGR | Max DD | Calmar | Turnover |
+|---|---|---|---|---|---|---|
+| Full Kelly | 0.836 | 0.884 | 29.9% | -34.0% | 0.581 | 1.88x |
+| Half-Kelly | 0.831 | 0.879 | 29.6% | -31.9% | 0.611 | 1.85x |
+| **BL + Kelly** | **0.712** | **0.761** | **26.0%** | **-38.4%** | **0.450** | **1.63x** |
+| Equal Weight | 0.448 | 0.429 | 12.7% | -27.8% | 0.308 | 0.22x |
+| Vol-Targeted BL | 0.419 | 0.417 | 13.7% | -43.1% | 0.214 | 1.31x |
+| Risk Parity | 0.142 | 0.140 | 7.2% | -21.5% | 0.227 | 0.27x |
+| HRP | -0.125 | -0.130 | 4.5% | -19.9% | 0.154 | 0.64x |
 
-### Walk-Forward Out-of-Sample (BL + Kelly, OOS start 2016-11)
+### Validation Summary (BL + Kelly)
 
-| | In-Sample | Out-of-Sample | Ratio |
-|---|---|---|---|
-| Sharpe Ratio | 0.865 | 0.800 | 92% — [OK] |
+| Metric | Value | Status |
+|---|---|---|
+| Backtest period | 2014-09-17 to 2025-12-30 (11.3 years) | |
+| Deflated Sharpe Ratio (DSR) | 0.999 | PASS |
+| Probabilistic Sharpe Ratio (PSR) | 0.822 | FAIL (< 0.95) |
+| Min Backtest Length (MinBTL) | 955 days required; sample sufficient | PASS |
+| CPCV mean OOS Sharpe | 0.309 +/- 0.488 (45 splits) | |
+| Probability of Backtest Overfitting (PBO) | 0.311 | OK (< 0.5) |
+| Annualized residual alpha | 14.93% (t=2.53, p=0.012) | PASS |
+| Test suite | 470 tests passing (28 test modules) | |
 
-*Universe: SPY, QQQ, IWM, EFA, TLT, IEF, GLD, SLV, USO, BTC-USD, DBA, VNQ — monthly rebalance — 10 bps commission + 5 bps slippage. Walk-forward uses an expanding window anchored at the first price date; no future data is ever visible to the weight estimator.*
+Universe: SPY, QQQ, IWM, EFA, TLT, IEF, GLD, SLV, USO, BTC-USD, DBA, VNQ. Monthly rebalance. Almgren-Chriss cost model with spread, temporary impact, permanent impact, and volatility slippage.
 
----
-
-## Charts
-
-### Equity Curves (Equal Weight / Half-Kelly / Full Kelly)
-![Equity Curves](output/charts/equity_curves.png)
-
-### Return Estimator Comparison (Historical Mean vs Black-Litterman)
-![Return Estimator Comparison](output/charts/return_estimator_comparison.png)
-
-### In-Sample vs Out-of-Sample Equity Curves (Walk-Forward)
-![IS vs OOS](output/charts/is_vs_oos_equity.png)
-
-### Monte Carlo Fan Chart (1-Year Forward, 50,000 Paths)
-![Monte Carlo](output/charts/monte_carlo_fan.png)
-
-### Rolling 252-Day Sharpe Ratio
-![Rolling Sharpe](output/charts/rolling_sharpe.png)
-
-### Portfolio Drawdowns
-![Drawdowns](output/charts/drawdowns.png)
-
-### Monthly Returns Heatmap (Half-Kelly)
-![Monthly Returns Heatmap](output/charts/monthly_heatmap.png)
-
-### Portfolio Weight Allocation Over Time
-![Weight Evolution](output/charts/weight_evolution.png)
+![Strategy Comparison](output/charts/strategy_comparison.png)
+*Equity curves for all seven strategies on common axes.*
 
 ---
 
-## Architecture
+## Why This Project Exists
 
-```mermaid
-flowchart TD
-    A[Yahoo Finance API] -->|yfinance + parquet cache| B[fetcher.py]
-    B --> C[returns.py\nlog returns]
-    C --> D[covariance.py\nLedoit-Wolf / EWMA]
-    C --> E[black_litterman.py\nBL posterior μ]
-    C --> F[equal_weight.py\n1/N benchmark]
-    D --> E
-    D --> G[kelly.py\nΣ⁻¹μ weights]
-    E --> G
-    F --> H[backtest.py\nevent-driven loop]
-    G -->|signals.py| H
-    H --> I[costs.py\n10bps + 5bps slippage]
-    H --> J[metrics.py\nSharpe / VaR / Calmar]
-    H --> K[simulation.py\n50k Monte Carlo paths]
-    H --> L[walk_forward.py\nexpanding-window OOS]
-    J --> M[charts.py + report.py]
-    K --> M
-    L --> M
-```
+Most published backtests are overfitted. They use full-sample optimization, ignore transaction costs, and report in-sample Sharpe ratios as if they were out-of-sample expectations. The result is a literature full of strategies that look excellent on paper and fail in production.
+
+This project exists to layer every defense I know of against that failure mode: nonlinear transaction costs (Almgren-Chriss), expanding-window walk-forward validation with no lookahead by construction, combinatorial purged cross-validation (CPCV) for overfitting probability estimation, deflated Sharpe ratios for multiple-testing correction, Fama-French five-factor plus momentum attribution to separate alpha from known risk premia, and HMM regime conditioning to understand when the strategy works and when it does not. The goal is not to produce the highest possible Sharpe ratio — it is to produce the most honestly evaluated one.
+
+---
+
+## Methodology
+
+The engine layers five defenses against backtest overfitting: (1) a five-test statistical validation stack (DSR, PSR, CPCV, PBO, MinBTL — detailed in Validation Framework below), (2) Almgren-Chriss nonlinear transaction costs producing 223.7 bps/yr drag at 1.63x turnover, (3) a constrained BL + Kelly portfolio construction pipeline (40% position cap, 1.5x leverage, 30% turnover cap), (4) Fama-French five-factor plus momentum attribution to separate alpha from known risk premia, and (5) HMM regime conditioning to reveal when the strategy works.
+
+The main empirical conclusion: DSR passes (0.999) and PBO is below 0.5 (0.311), suggesting the result is not purely noise. But PSR fails at 95% confidence (0.822) — the strategy does not statistically dominate equal-weight after adjusting for higher moments. Performance is strongly regime-dependent: LOW_VOL environments (48% of days) produce a Sharpe of 1.234, while HIGH_VOL yields only 0.125. The residual alpha of 14.93% (t=2.53) is statistically significant but partly reflects unmodeled alternative risk premia in a multi-asset universe with R-squared of only 0.277.
+
+---
+
+## System Architecture
 
 ```
-quant-backtest-engine/
-│
-├── config.py                     # Central configuration (all tunable params)
-├── main.py                       # Single entry point — full pipeline
-│
+├── config.py                        Central configuration
+├── main.py                          Single entry point
 ├── src/
-│   ├── data/
-│   │   ├── fetcher.py            # Yahoo Finance ingestion + parquet cache
-│   │   └── returns.py            # Log-return computation and alignment
-│   │
-│   ├── engine/
-│   │   ├── backtest.py           # Event-driven backtester core loop
-│   │   └── costs.py              # Proportional transaction cost model
-│   │
-│   ├── optimization/
-│   │   ├── covariance.py         # Sample / Ledoit-Wolf / EWMA estimators
-│   │   ├── kelly.py              # Multi-asset Kelly criterion optimizer
-│   │   ├── black_litterman.py    # BL return estimator (equilibrium + views)
-│   │   ├── views.py              # Momentum view generation (P, Q, Ω)
-│   │   ├── equal_weight.py       # 1/N benchmark strategy
-│   │   └── signals.py            # Signal factories (wraps optimizers)
-│   │
-│   ├── risk/
-│   │   ├── metrics.py            # Sharpe, Sortino, VaR, CVaR, Calmar, ...
-│   │   └── regime.py             # Rolling vol regime classifier
-│   │
-│   ├── monte_carlo/
-│   │   └── simulation.py         # Vectorized 50k-path forward simulator
-│   │
-│   ├── validation/
-│   │   ├── walk_forward.py       # Anchored expanding-window OOS validation
-│   │   └── oos_metrics.py        # IS vs OOS comparison table
-│   │
-│   └── visualization/
-│       ├── charts.py             # 8 publication-quality matplotlib charts
-│       └── report.py             # Text report generator
-│
-├── tests/                        # 175 pytest tests (100% passing)
-├── data/cache/                   # Parquet price cache (git-ignored)
-└── output/                       # Charts + report (git-ignored)
+│   ├── data/                        Yahoo Finance ingestion, parquet cache, log returns
+│   ├── engine/                      Event-driven backtester, Almgren-Chriss + proportional costs
+│   ├── optimization/                Kelly, Black-Litterman, HRP, risk parity, vol targeting,
+│   │                                6 covariance estimators, signal factories
+│   ├── risk/                        Risk metrics, HMM regime detection, factor attribution
+│   ├── validation/                  Walk-forward OOS, CPCV/PBO/DSR/PSR/MinBTL, parameter stability
+│   ├── monte_carlo/                 50k-path forward simulation
+│   └── visualization/               23 charts, text report
+├── tests/                           470 tests across 28 test modules
+├── data/cache/                      Parquet price/volume/factor cache
+└── output/                          23 charts + report.txt
 ```
 
 ---
 
-## Quick Start
+## Primary Strategy & Strategy Set
 
-**Requirements:** Python 3.11+
+### Primary Strategy: Black-Litterman + Kelly Criterion
+
+BL posterior returns (delta=2.5, tau=0.05, 252-day momentum views at 25% confidence) feed into Kelly f* = Sigma^{-1}(mu - r), constrained to 40% position cap, 1.5x leverage, 30% turnover cap, monthly rebalance. Result: Sharpe 0.712, CAGR 26.0%, max drawdown -38.4%, cost drag 223.7 bps/yr, total costs $1.55M on $1M initial capital over 11.3 years.
+
+### All Seven Strategies
+
+1. **Equal Weight** — 1/N benchmark. Sharpe 0.448, CAGR 12.7%. Lowest turnover (0.22x).
+2. **Half-Kelly** — Kelly at fraction 0.5 with historical means. Sharpe 0.831, CAGR 29.6%. Best Calmar (0.611).
+3. **Full Kelly** — Kelly at fraction 1.0. Sharpe 0.836, CAGR 29.9%. Highest Sharpe, deeper drawdowns (-34.0%).
+4. **BL + Kelly** — BL posterior as return input. Sharpe 0.712, CAGR 26.0%. Selected as primary for principled return estimation.
+5. **HRP** — Hierarchical Risk Parity (Lopez de Prado, 2016). Sharpe -0.125, CAGR 4.5%. Negative risk-adjusted return.
+6. **Risk Parity** — Equal-risk-contribution. Sharpe 0.142, CAGR 7.2%. Low turnover (0.27x).
+7. **Vol-Targeted BL** — BL + Kelly with 10% target-vol overlay. Sharpe 0.419, CAGR 13.7%. Deepest drawdown (-43.1%).
+
+---
+
+## Covariance Estimation
+
+Six methods share the `CovarianceEstimator.estimate(returns) -> DataFrame` protocol:
+
+| Method | Description |
+|---|---|
+| Sample | Standard sample covariance matrix |
+| Ledoit-Wolf (linear) | Analytical shrinkage toward scaled identity (default) |
+| Ledoit-Wolf (nonlinear) | Kernel-based nonlinear shrinkage |
+| EWMA | Exponentially weighted, lambda=0.94 |
+| RMT denoised | Random Matrix Theory eigenvalue clipping |
+| DCC-GARCH | Engle (2002) Dynamic Conditional Correlation |
+
+Walk-forward and CPCV pin Ledoit-Wolf linear for expanding-window stability, regardless of `COV_METHOD`. A full comparison backtest is available via `ENABLE_COVARIANCE_COMPARISON = True` in `config.py` (disabled by default for runtime cost).
+
+---
+
+## Validation Framework
+
+All values from the STATISTICAL VALIDATION section of `output/report.txt`.
+
+**DSR: 0.999 [PASS].** Corrects for skewness, kurtosis, and multiple testing. With 1 trial the correction is minimal, but the framework scales via `N_STRATEGY_TRIALS`.
+
+**PSR: 0.822 [FAIL].** The strategy does not statistically exceed equal-weight at 95% confidence — the Sharpe difference (0.712 vs 0.448) is insufficient relative to SR standard error (0.274). An honest negative result.
+
+**MinBTL: 955 days / 3.8 years [PASS].** The 11.3-year sample exceeds the minimum required.
+
+**CPCV: mean OOS Sharpe 0.309 +/- 0.488 (45 splits).** 10 chronological groups, C(10,2) = 45 train/test combinations, 5-day purge, 1% embargo. Positive mean OOS Sharpe supports but does not guarantee viability. **Caveat:** uses static weight estimation with Ledoit-Wolf covariance, not the full walk-forward costed path.
+
+**PBO: 0.311 [OK].** Below the 0.5 threshold (IS/OOS rank correlation: -0.888, degradation: 1.872).
+
+**Walk-Forward.** Expanding-window, monthly rebalance, 756-day minimum training, no-lookahead by construction (unit-tested). IS/OOS Sharpe logged at runtime; run `python main.py` to observe.
+
+---
+
+## Transaction Cost Model
+
+The Almgren-Chriss (2001) framework decomposes execution cost into four components:
+
+| Component | Formula | Description |
+|---|---|---|
+| Spread | `spread_bps * abs(trade_value)` | Half bid-ask spread (5 bps default) |
+| Temporary impact | `eta * sigma * sqrt(abs(trade_value) / ADV)` | Transient price displacement |
+| Permanent impact | `gamma * sigma * (abs(trade_value) / ADV)` | Lasting information leakage |
+| Vol slippage | `slippage_factor * sigma * abs(trade_value)` | Volatility-proportional execution noise |
+
+Parameters: eta=0.1, gamma=0.1, slippage_factor=0.5, ADV window=20 days. Turnover capped at 30% per rebalance (`MAX_TURNOVER` in config).
+
+| Metric | Value |
+|---|---|
+| Annualized turnover | 1.63x |
+| Average holding period | 154 days |
+| Cost drag | 223.7 bps/yr |
+
+### Cost Sensitivity
+
+| Cost Multiplier | Sharpe |
+|---|---|
+| 0.0x | 0.822 |
+| 0.5x | 0.768 |
+| **1.0x** | **0.712** |
+| 2.0x | 0.601 |
+| 3.0x | 0.489 |
+| 5.0x | 0.267 |
+
+The strategy remains positive-Sharpe even at 5x cost assumptions, though the margin is thin.
+
+---
+
+## Factor Attribution
+
+Fama-French five-factor plus momentum regression on BL + Kelly daily excess returns (2,839 observations).
+
+| Metric | Value |
+|---|---|
+| Annualized alpha | 14.93% (t=2.53, p=0.012) |
+| R-squared | 0.277 |
+| Alpha Sharpe | 0.792 |
+| Information Ratio | 0.792 |
+
+| Factor | Beta | t-stat | p-value | Attributed Return |
+|---|---|---|---|---|
+| Mkt-RF | 0.565 | 17.32 | 0.000 | 6.99% |
+| SMB | 0.223 | 4.99 | 0.000 | -0.52% |
+| HML | -0.001 | -0.03 | 0.973 | 0.00% |
+| RMW | -0.318 | -6.35 | 0.000 | -0.91% |
+| CMA | 0.341 | 4.62 | 0.000 | -0.50% |
+| Mom | 0.267 | 10.61 | 0.000 | 0.88% |
+
+**Caveat:** FF5+Mom is equity-centric; the multi-asset universe includes BTC, commodities, and REITs. The low R-squared reflects this mismatch. Residual alpha partly captures unmodeled alternative risk premia rather than pure skill.
+
+![Factor Exposures](output/charts/factor_exposures.png)
+*Fama-French five-factor plus momentum betas.*
+
+---
+
+## Regime Analysis
+
+Hidden Markov Model (3-state, fitted on SPY returns) classifies each trading day into LOW_VOL, MID_VOL, or HIGH_VOL.
+
+### BL + Kelly by Regime
+
+| Regime | Days | Fraction | Sharpe | Ann. Return | Max DD | Volatility |
+|---|---|---|---|---|---|---|
+| LOW_VOL | 1,970 | 48.0% | 1.234 | 30.79% | -15.17% | 21.71% |
+| MID_VOL | 1,280 | 31.2% | 0.198 | 6.24% | -3.69% | 11.32% |
+| HIGH_VOL | 853 | 20.8% | 0.125 | 6.88% | -26.15% | 23.10% |
+
+### Conditional Performance — All Strategies (Sharpe by Regime)
+
+| Strategy | LOW_VOL | MID_VOL | HIGH_VOL |
+|---|---|---|---|
+| Equal Weight | 1.165 | -0.279 | 0.029 |
+| Half-Kelly | 1.454 | 0.111 | 0.227 |
+| Full Kelly | 1.445 | 0.156 | 0.254 |
+| BL + Kelly | 1.234 | 0.198 | 0.125 |
+| HRP | 0.434 | -3.433 | -0.208 |
+| Risk Parity | 0.835 | -1.822 | -0.188 |
+| Vol-Targeted BL | 1.200 | -0.074 | -0.248 |
+
+LOW_VOL drives all strategies' Sharpe. In HIGH_VOL, Half-Kelly, Full Kelly, and BL + Kelly remain slightly positive; HRP, Risk Parity, and Vol-Targeted BL go negative.
+
+### Transition Probabilities
+
+| From \ To | LOW_VOL | MID_VOL | HIGH_VOL |
+|---|---|---|---|
+| LOW_VOL | 0.772 | 0.222 | 0.006 |
+| MID_VOL | 0.356 | 0.513 | 0.131 |
+| HIGH_VOL | 0.000 | 0.205 | 0.795 |
+
+HIGH_VOL is highly persistent (79.5% self-transition) and never transitions directly to LOW_VOL — it must pass through MID_VOL first.
+
+![Conditional Performance Heatmap](output/charts/conditional_performance_heatmap.png)
+*Sharpe ratio by strategy and HMM regime.*
+
+![Regime Overlay](output/charts/regime_overlay.png)
+*Equity curve with HMM regime shading (SPY benchmark).*
+
+---
+
+## Parameter Stability
+
+The parameter stability module (`src/validation/parameter_stability.py`) tests sensitivity over a grid of (Kelly fraction, BL tau, view confidence, lookback) using rolling 3-year windows stepped quarterly, classifying each parameter as STABLE (CV < 0.5) or UNSTABLE. Disabled by default (`ENABLE_PARAMETER_STABILITY = False`); not part of the default pipeline.
+
+---
+
+## Limitations
+
+1. **Daily close-to-close data only** — no intraday prices, no bid-ask spreads, no order book data
+2. **Yahoo Finance data quality** — adjusted closes with possible backfill and survivorship issues; no delisted assets in the universe
+3. **Fixed 12-asset universe selected ex-post** — no asset selection alpha is claimed; results are conditional on this specific universe
+4. **BTC-USD starts 2014-09-17** — constrains the effective backtest start date; earlier history is unavailable
+5. **PSR fails at 95%** — the strategy does not statistically dominate equal-weight after adjusting for skewness and kurtosis of the Sharpe ratio distribution
+6. **CPCV uses static weight estimation** — Ledoit-Wolf covariance with pinned weights, not the full walk-forward rebalanced and costed path
+7. **Walk-forward pins Ledoit-Wolf covariance** — for expanding-window stability, regardless of the `COV_METHOD` config setting
+8. **Equity-centric factor model** — Fama-French five-factor plus momentum applied to a multi-asset universe including crypto, commodities, and REITs
+9. **Regime-dependent performance** — LOW_VOL environments drive most of the Sharpe; HIGH_VOL materially degrades all strategies
+10. **Almgren-Chriss parameters are defaults, not fitted** — eta=0.1, gamma=0.1 are reasonable but not calibrated to actual execution data
+11. **No live or paper trading validation** — all results are simulated on historical data
+12. **Research engine only** — no order management system, no execution layer, no real-time data infrastructure
+
+---
+
+## Installation & Usage
 
 ```bash
 git clone https://github.com/schoudhary90210/Quant-Backtest-Engine.git
-cd quant-backtest-engine
-
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
+cd Quant-Backtest-Engine
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-python main.py
+python main.py          # full pipeline
+pytest tests/ -q        # 470 tests
 ```
 
-Output is written to:
-- `output/charts/` — 8 PNG charts at 300 DPI
-- `output/report.txt` — full risk report
+**Output:**
+- `output/charts/` — 23 PNG charts at 300 DPI
+- `output/report.txt` — full risk report with strategy comparison, validation, factor attribution, regime analysis
 
-**Run tests:**
-
-```bash
-pytest tests/ -v
-```
+**Configuration:** All parameters in `config.py`. Pipeline flags in `main.py`: `WALK_FORWARD`, `RETURN_ESTIMATOR`. Optional modules: `ENABLE_COVARIANCE_COMPARISON`, `ENABLE_PARAMETER_STABILITY`, `ENABLE_CPCV`, `ENABLE_FACTOR_ATTRIBUTION`.
 
 ---
 
-## Configuration
+## References
 
-All parameters are in `config.py` — no magic numbers anywhere in the library code:
-
-```python
-ASSETS = ["SPY", "QQQ", "IWM", ...]   # 12-asset universe
-START_DATE = "2010-01-01"
-INITIAL_CAPITAL = 1_000_000
-REBALANCE_FREQ = "monthly"             # 'daily' or 'monthly'
-TRANSACTION_COST_BPS = 10             # round-trip commission
-SLIPPAGE_BPS = 5
-KELLY_FRACTION = 0.5                   # half-Kelly
-MAX_POSITION_WEIGHT = 0.40            # 40% single-asset cap
-MAX_LEVERAGE = 1.5                     # gross exposure cap
-COV_METHOD = "ledoit_wolf"            # 'sample', 'ledoit_wolf', 'ewma'
-MC_NUM_PATHS = 50_000
-BL_RISK_AVERSION = 2.5                # market risk-aversion coefficient δ
-BL_TAU = 0.05                         # prior uncertainty scaling
-BL_VIEW_LOOKBACK = 252                # momentum window for BL views
-```
-
-Pipeline flags in `main.py`:
-
-```python
-WALK_FORWARD = True          # anchored OOS validation (~2 min extra)
-RETURN_ESTIMATOR = "black_litterman"  # or "historical_mean"
-```
-
----
-
-## Technical Deep Dive
-
-### Kelly Criterion (`src/optimization/kelly.py`)
-
-The Kelly Criterion provides the theoretically optimal bet size that maximises the long-run geometric growth rate. The multi-asset formulation I implement is **f\* = Σ⁻¹(μ − r)**, where **Σ** is the N×N covariance matrix, **μ** is the vector of expected excess returns, and **r** is the risk-free rate. I solve the system via `numpy.linalg.solve` rather than explicit matrix inversion, falling back to `numpy.linalg.lstsq` when the matrix is near-singular. Constraints are applied after solving: zero out assets with negative excess return, clip each position to `MAX_POSITION_WEIGHT` (40%), then scale if gross exposure exceeds `MAX_LEVERAGE` (1.5×). I default to **Half-Kelly (fraction = 0.5)**, which cuts position sizes in half while retaining most of the geometric-growth advantage — the results show essentially identical CAGR to Full Kelly with a materially better Calmar ratio.
-
-### Ledoit-Wolf Covariance Shrinkage (`src/optimization/covariance.py`)
-
-The sample covariance matrix has estimation error that grows with N (assets) relative to T (observations), producing extreme and unstable weights. The Ledoit-Wolf (2004) estimator shrinks the sample covariance **S** toward a scaled identity target: **Σ̂ = (1 − α)S + αμI**, where the optimal shrinkage intensity **α** is derived analytically without cross-validation. Three swappable estimators — `SampleCovariance`, `LedoitWolfCovariance`, and `EWMACovariance` — all implement the same `estimate(returns) → pd.DataFrame` protocol and are drop-in replaceable via the `COV_METHOD` config key. Ledoit-Wolf is the default because it consistently produces better-conditioned matrices even in the typical regime of 252 observations × 12 assets.
-
-### Black-Litterman Return Estimator (`src/optimization/black_litterman.py`, `views.py`)
-
-The Black-Litterman model replaces raw historical means with a Bayesian posterior that blends an equilibrium prior with investor views. The equilibrium prior is **π = δΣw_mkt**, where w_mkt are market-cap proxy weights from `config.MARKET_CAP_WEIGHTS` and δ = 2.5. I generate absolute momentum views automatically: **P = I** (identity pick matrix), **Q** = trailing 252-day annualised log returns, and **Ω** diagonal with scale = (1/view_confidence − 1)×τ×diag(Σ), giving the prior 75% weight (view_confidence=0.25). The posterior is **μ_BL = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹[(τΣ)⁻¹π + P'Ω⁻¹Q]**, solved entirely via `np.linalg.solve` with no explicit matrix inversion. In practice, BL + Kelly reduces drawdowns slightly vs. raw historical mean + Kelly, at a modest reduction in raw CAGR (30.8% vs. 33.0%), because the equilibrium prior prevents the optimizer from over-allocating to assets with large recent momentum.
-
-### Walk-Forward Out-of-Sample Validation (`src/validation/walk_forward.py`)
-
-The walk-forward engine re-estimates Kelly weights monthly using an expanding window anchored at the first price date — the training slice for any rebalance date is strictly `log_returns.loc[:date]`, so future data is structurally impossible to observe. The `_walk_forward_signal` ignores the `prices` argument entirely; weights are pre-computed and only looked up at runtime, making lookahead impossible by construction (verified by a unit test that appends 200%/day synthetic returns after a split date and confirms identical weights at all common dates). The minimum training window is 756 days (~3 years), so the first valid OOS rebalance is 2016-11. The OOS Sharpe (0.800) is 92% of the IS Sharpe (0.865), well above the 50% overfitting threshold, confirming the strategy generalises beyond the in-sample period.
-
-### Monte Carlo Simulation (`src/monte_carlo/simulation.py`)
-
-The Monte Carlo engine generates 50,000 forward paths of 252 trading days using a fully vectorised NumPy implementation — all 50,000 × 252 draws happen in a single `numpy.random.Generator.multivariate_normal` call. It operates on the historical portfolio return distribution (fitted mean and Ledoit-Wolf covariance), producing terminal wealth distributions, per-path maximum drawdown computed via vectorised cumulative-maximum, and underwater period statistics. The random seed is fixed via `config.MC_SEED` for full reproducibility. The 5th–95th percentile band and median path are rendered in `plot_monte_carlo_fan`.
+- Almgren, R. & Chriss, N. (2001). Optimal execution of portfolio transactions. *Journal of Risk*, 3(2), 5-39.
+- Bailey, D. & Lopez de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. *Journal of Portfolio Management*, 40(5), 94-107.
+- Bailey, D., Borwein, J., Lopez de Prado, M., & Zhu, Q. (2017). The probability of backtest overfitting. *Journal of Computational Finance*, 20(4), 39-69.
+- Black, F. & Litterman, R. (1992). Global portfolio optimization. *Financial Analysts Journal*, 48(5), 28-43.
+- Engle, R. (2002). Dynamic conditional correlation: a simple class of multivariate GARCH models. *Journal of Business & Economic Statistics*, 20(3), 339-350.
+- Fama, E. & French, K. (2015). A five-factor asset pricing model. *Journal of Financial Economics*, 116(1), 1-22.
+- Kelly, J. (1956). A new interpretation of information rate. *Bell System Technical Journal*, 35(4), 917-926.
+- Ledoit, O. & Wolf, M. (2004). A well-conditioned estimator for large-dimensional covariance matrices. *Journal of Multivariate Analysis*, 88(2), 365-411.
+- Lopez de Prado, M. (2016). Building diversified portfolios that outperform out of sample. *Journal of Portfolio Management*, 42(4), 59-69.
+- Lopez de Prado, M. (2018). *Advances in Financial Machine Learning*. Wiley.
+- Roncalli, T. (2013). *Introduction to Risk Parity and Budgeting*. Chapman & Hall/CRC.
 
 ---
 

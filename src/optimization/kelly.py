@@ -30,6 +30,8 @@ def kelly_weights(
     fraction: float = config.KELLY_FRACTION,
     max_weight: float = config.MAX_POSITION_WEIGHT,
     max_leverage: float = config.MAX_LEVERAGE,
+    current_weights: pd.Series | None = None,
+    max_turnover: float | None = None,
 ) -> pd.Series:
     """
     Compute constrained fractional Kelly weights.
@@ -97,7 +99,19 @@ def kelly_weights(
     full_weights = np.zeros(n)
     full_weights[active_idx] = raw_weights
 
-    return pd.Series(full_weights, index=tickers)
+    result_weights = pd.Series(full_weights, index=tickers)
+
+    # ── Apply turnover constraint (proportional scaling / L1 projection) ──
+    if current_weights is not None and max_turnover is not None:
+        current = current_weights.reindex(tickers, fill_value=0.0)
+        trade = result_weights - current
+        one_way = float(np.sum(np.abs(trade.values))) / 2.0
+        if one_way > max_turnover and one_way > 1e-10:
+            scale = max_turnover / one_way
+            result_weights = current + trade * scale
+            result_weights = result_weights.clip(lower=0.0)
+
+    return result_weights
 
 
 def _solve_kelly(cov: np.ndarray, excess_returns: np.ndarray) -> np.ndarray:
